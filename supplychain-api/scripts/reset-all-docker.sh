@@ -1,14 +1,9 @@
-# fabric-supplychain-app/supplychain-api/scripts/reset-all-docker.sh
-
 #!/bin/bash
 set -euxo pipefail
 
-# 🔁 Docker コンテナ全停止・削除
+# �� Docker コンテナ全停止・削除
 docker stop $(docker ps -q) || true
 docker rm $(docker ps -aq) || true
-
-# （任意）ボリューム削除したいとき：
-# docker system prune -af --volumes
 
 # 📦 Fabricネットワーク停止
 cd ~/dev/fabric-supplychain-app/fabric-samples/test-network
@@ -26,25 +21,30 @@ rm -f ~/dev/fabric-supplychain-app/supplychain-api/db.json
   -ccl javascript \
   -ccep "OR('Org1MSP.peer')"  
 
-# 🔑 appUser 再登録（Docker版）
+# CA証明書の取得
+docker cp ca_org1:/etc/hyperledger/fabric-ca-server/ca-cert.pem ~/dev/fabric-supplychain-app/supplychain-api/config/ca-cert.pem
+
+# Adminの登録
 docker run -it --rm \
+  --network fabric_test \
   -v ~/dev/fabric-supplychain-app/supplychain-api/wallet:/app/wallet \
   -v ~/dev/fabric-supplychain-app/supplychain-api/config:/app/config \
   --entrypoint node \
   supplychain-api scripts/enrollAdmin.js
 
+# ユーザーの登録
 docker run -it --rm \
+  --network fabric_test \
   -v ~/dev/fabric-supplychain-app/supplychain-api/wallet:/app/wallet \
   -v ~/dev/fabric-supplychain-app/supplychain-api/config:/app/config \
   --entrypoint node \
   supplychain-api scripts/registerUser.js
 
-# 🚀 API起動（最後は手動 or 下記で連携）
-# node app.js
-
+# 🚀 API起動
 cd ~/dev/fabric-supplychain-app/supplychain-api
 docker build -t supplychain-api .
 docker run -it --rm \
+  --network fabric_test \
   -v $(pwd)/wallet:/app/wallet \
   -v $(pwd)/config:/app/config \
   -p 3000:3000 \

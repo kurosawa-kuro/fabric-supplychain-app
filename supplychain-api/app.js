@@ -87,11 +87,10 @@ async function getContract() {
     identity: 'appUser',
     discovery: {
       enabled: true,
-      asLocalhost: false 
+      asLocalhost: false
     },
-    tlsInfo: {
-      certificate: fs.readFileSync(path.resolve(__dirname, 'config', 'tls-cert.pem')),
-      hostnameOverride: 'peer0.org1.example.com'
+    eventHandlerOptions: {
+      commitTimeout: 30000
     }
   });
 

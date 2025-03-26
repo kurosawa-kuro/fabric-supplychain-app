@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supplychain-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supplychain-api
+  template:
+    metadata:
+      labels:
+        app: supplychain-api
+    spec:
+      containers:
+        - name: api
+          image: kurosawakuro/supplychain-api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: HFC_LOGGING
+              value: '{"debug":"off","info":"off"}'
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+            - name: tls
+              mountPath: /app/config
+              readOnly: true
+            - name: wallet
+              mountPath: /app/wallet
+      volumes:
+        - name: config
+          configMap:
+            name: fabric-config
+        - name: tls
+          secret:
+            secretName: fabric-tls
+        - name: wallet
+          emptyDir: {}
