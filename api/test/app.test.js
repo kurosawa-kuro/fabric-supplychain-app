@@ -1,10 +1,13 @@
 const request = require('supertest');
-const { app } = require('./app');
-const { db } = require('./database/initializeMasterData');
-const { startServer, getServer } = require('./server');
+const { app } = require('../app');
+const { db } = require('../database/initializeMasterData');
+const { startServer} = require('../server');
 
 // fabric-network 全体をモック
 jest.mock('fabric-network');
+
+// テスト用のDBファイルを指定
+process.env.DB_FILE = 'db-test.json';
 
 describe('Hyperledger Fabric Mocked Test', () => {
   let server;

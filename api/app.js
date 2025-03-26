@@ -4,7 +4,6 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const { Gateway, Wallets } = require('fabric-network');
-const crypto = require('crypto');
 const { db, initializeMasterData } = require('./database/initializeMasterData');
 const { createHashBySortedKeys } = require('./util');
 
