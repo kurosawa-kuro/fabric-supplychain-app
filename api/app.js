@@ -7,48 +7,49 @@ const { Gateway, Wallets } = require('fabric-network');
 const crypto = require('crypto');
 const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
-
 const adapter = new FileSync(path.resolve(__dirname, 'db.json'));
 const db = low(adapter);
+
 const app = express();
 app.use(express.json());
 
-const defaultData = {
-  parts: [
-    {
-      part_id: 'BAT-001',
-      model: 'EV6000',
-      capacity_ah: 60,
-      voltage_v: 3.2,
-      manufacturer: 'ENEGEN Power Systems',
-      manufactured_at: '2025-03-20',
-      supplier_id: 'SUP-101'
-    }
-  ],
-  suppliers: [
-    {
-      supplier_id: 'SUP-101',
-      name: 'エネゲンパワーシステムズ株式会社',
-      location: '福島県郡山市',
-      certification: 'ISO/TS 16949',
-      material_type: 'LiFePO4セル'
-    }
-  ],
-  operators: [
-    {
-      operator_id: 'USR-9001',
-      name: '佐藤 太一',
-      role: '検査員',
-      organization: 'ENEGEN 第2製造所'
-    }
-  ]
-};
+function seedMasterData() {
+  const defaultData = {
+    parts: [
+      {
+        part_id: 'BAT-001',
+        model: 'EV6000',
+        capacity_ah: 60,
+        voltage_v: 3.2,
+        manufacturer: 'ENEGEN Power Systems',
+        manufactured_at: '2025-03-20',
+        supplier_id: 'SUP-101'
+      }
+    ],
+    suppliers: [
+      {
+        supplier_id: 'SUP-101',
+        name: 'エネゲンパワーシステムズ株式会社',
+        location: '福島県郡山市',
+        certification: 'ISO/TS 16949',
+        material_type: 'LiFePO4セル'
+      }
+    ],
+    operators: [
+      {
+        operator_id: 'USR-9001',
+        name: '佐藤 太一',
+        role: '検査員',
+        organization: 'ENEGEN 第2製造所'
+      }
+    ]
+  };
 
-(async () => {
-  await db.read();
-  db.data = defaultData;
-  await db.write();
-})();
+  db.defaults(defaultData).write();
+  console.log('✅ db.json にマスターデータをシードしました（常時上書き）');
+}
+
+seedMasterData();
 
 async function getContract() {
   const ccpPath = path.resolve(__dirname, 'config', 'connection-org1.json');
@@ -78,10 +79,9 @@ app.post('/api/part-event', async (req, res) => {
   const { event_id, part_id, status, timestamp, location, operator_id } = req.body;
 
   try {
-    await db.read();
-    const part = db.data.parts.find(p => p.part_id === part_id);
-    const supplier = db.data.suppliers.find(s => s.supplier_id === part?.supplier_id);
-    const operator = db.data.operators.find(o => o.operator_id === operator_id);
+    const part = db.get('parts').find({ part_id }).value();
+    const supplier = db.get('suppliers').find({ supplier_id: part?.supplier_id }).value();
+    const operator = db.get('operators').find({ operator_id }).value();
 
     if (!part || !supplier || !operator) {
       return res.status(400).json({ error: 'マスターデータが不足しています' });
