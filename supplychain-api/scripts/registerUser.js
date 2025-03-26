@@ -1,4 +1,4 @@
-// /home/ec2-user/dev/hyperledger-fabric-helloworld/api/scripts/registerUser.js
+// /home/ec2-user/dev/fabric-supplychain-app/supplychain-api/scripts/registerUser.js
 
 const fs = require('fs');
 const path = require('path');

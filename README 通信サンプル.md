@@ -1,14 +1,28 @@
-rm -rf ~/dev/hyperledger-fabric-helloworld/api/wallet/*
+cd supplychain-api
+docker build -t supplychain-api .
+docker run -it --rm \
+  -v $(pwd)/wallet:/app/wallet \
+  -v $(pwd)/config:/app/config \
+  -p 3000:3000 \
+  supplychain-api
+
+
+
+
+
+
+
+rm -rf ~/dev/fabric-supplychain-app/supplychain-api/wallet/*
 
 # 修正後の scripts 実行
-node ~/dev/hyperledger-fabric-helloworld/api/scripts/enrollAdmin.js
-node ~/dev/hyperledger-fabric-helloworld/api/scripts/registerUser.js
+node ~/dev/fabric-supplychain-app/supplychain-api/scripts/enrollAdmin.js
+node ~/dev/fabric-supplychain-app/supplychain-api/scripts/registerUser.js
 
 # 確認
-ls -l ~/dev/hyperledger-fabric-helloworld/api/wallet/
+ls -l ~/dev/fabric-supplychain-app/supplychain-api/wallet/
 # → admin.id / appUser.id ができていれば OK
 
-cd ~/dev/hyperledger-fabric-helloworld/api/
+cd ~/dev/fabric-supplychain-app/supplychain-api/
 node app.js
 
 

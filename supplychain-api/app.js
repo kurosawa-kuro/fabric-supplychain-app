@@ -85,7 +85,14 @@ async function getContract() {
   await gateway.connect(ccp, {
     wallet,
     identity: 'appUser',
-    discovery: { enabled: true, asLocalhost: true }
+    discovery: {
+      enabled: true,
+      asLocalhost: false 
+    },
+    tlsInfo: {
+      certificate: fs.readFileSync(path.resolve(__dirname, 'config', 'tls-cert.pem')),
+      hostnameOverride: 'peer0.org1.example.com'
+    }
   });
 
   const network = await gateway.getNetwork('mychannel');
@@ -147,8 +154,22 @@ app.post('/api/part-event', async (req, res) => {
     const supplierHash = createHashBySortedKeys(supplierData);
     const operatorHash = createHashBySortedKeys(operatorData);
 
-    // Fabricにイベント登録
     const { contract, gateway } = await getContract();
+
+    // 📦 パラメータをログに出す
+    log(req, '📦 Fabricに送信するパラメータ:');
+    log(req, {
+      eventId,
+      partId,
+      status,
+      timestamp,
+      location,
+      operatorId,
+      partHash,
+      supplierHash,
+      operatorHash
+    });
+
     const txResult = await contract.submitTransaction(
       'recordPartEvent',
       eventId,
@@ -161,9 +182,12 @@ app.post('/api/part-event', async (req, res) => {
       supplierHash,
       operatorHash
     );
+
+    log(req, `✅ Fabricからの応答: ${txResult.toString()}`);
+
     await gateway.disconnect();
 
-    // ローカルDBにもイベント保存（同じevent_idがあれば削除→追加）
+    // ローカルDBに保存
     const newEventData = {
       event_id: eventId,
       part_id: partId,
@@ -182,6 +206,14 @@ app.post('/api/part-event', async (req, res) => {
   } catch (error) {
     log(req, `❌ エラー: ${error.message}`);
     console.error(error);
+
+    if (error.responses) {
+      console.error('📩 responses:', error.responses);
+    }
+    if (error.errors) {
+      console.error('📛 errors:', error.errors);
+    }
+
     res.status(500).json({ error: error.message });
   }
 });

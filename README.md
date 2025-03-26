@@ -29,7 +29,7 @@ rm -rf wallet/*
 ### 2. Fabricネットワーク起動（インスタンス停止後、再開する場合はここから）
 
 ```bash
-cd ~/dev/hyperledger-fabric-helloworld/fabric-samples/test-network
+cd ~/dev/fabric-supplychain-app/fabric-samples/test-network
 ./network.sh up createChannel -ca
 ./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
 ```
@@ -39,7 +39,7 @@ cd ~/dev/hyperledger-fabric-helloworld/fabric-samples/test-network
 ### 3. appUser登録とAPI起動
 
 ```bash
-cd ~/dev/hyperledger-fabric-helloworld/api
+cd ~/dev/fabric-supplychain-app/supplychain-api
 npm install
 node scripts/enrollAdmin.js
 node scripts/registerUser.js
