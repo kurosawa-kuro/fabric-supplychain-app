@@ -43,11 +43,10 @@ function getOperatorById(operatorId) {
 }
 
 /**
- * イベントをeventsに保存（同一event_idがあれば先に削除→追加）
+ * イベントをeventsに保存
  * @param {object} newEvent
  */
 function saveEvent(newEvent) {
-  db.get('events').remove({ event_id: newEvent.event_id }).write();
   db.get('events').push(newEvent).write();
 }
 
@@ -124,6 +123,13 @@ app.post('/api/part-event', async (req, res) => {
   log(req, `🔔 登録要求: event_id=${eventId}, part_id=${partId}, operator_id=${operatorId}`);
 
   try {
+    // イベントIDの重複チェック
+    const existingEvent = getEventById(eventId);
+    if (existingEvent) {
+      log(req, `⚠️ 重複イベントID: event_id=${eventId}`);
+      return res.status(409).json({ error: 'event_id がすでに登録されています' });
+    }
+
     // マスターデータ取得
     const partData = getPartById(partId);
     const supplierData = partData ? getSupplierById(partData.supplier_id) : null;
