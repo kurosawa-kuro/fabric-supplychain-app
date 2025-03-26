@@ -1,4 +1,6 @@
+// Fabricチェーンコード（Node.js版）: part_event スキーマ対応
 'use strict';
+
 const { Contract } = require('fabric-contract-api');
 
 class PartEventContract extends Contract {
@@ -26,4 +28,3 @@ class PartEventContract extends Contract {
 }
 
 module.exports.contracts = [ PartEventContract ];
-
