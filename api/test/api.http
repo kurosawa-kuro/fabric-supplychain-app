@@ -1,9 +1,11 @@
+@event_id = EVT-004
+
 ### 🔹 オンチェーン登録：POST /api/part-event
 POST http://localhost:3000/api/part-event
 Content-Type: application/json
 
 {
-  "event_id": "EVT-003",
+  "event_id": "{{event_id}}",
   "part_id": "BAT-001",
   "status": "assembled",
   "timestamp": "2025-03-26T16:00:00Z",
@@ -14,12 +16,12 @@ Content-Type: application/json
 ###
 
 ### 🔍 オンチェーン取得：GET /api/query/:event_id
-GET http://localhost:3000/api/query/EVT-003
+GET http://localhost:3000/api/query/{{event_id}}
 
 ###
 
 ### 🔐 改ざん検証：GET /api/verify/:event_id
-GET http://localhost:3000/api/verify/EVT-003
+GET http://localhost:3000/api/verify/{{event_id}}
 
 ###
 

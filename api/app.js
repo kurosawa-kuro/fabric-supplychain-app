@@ -13,7 +13,7 @@ const FileSync = require('lowdb/adapters/FileSync');
 // =======================
 
 
-const dbFilePath = path.resolve(__dirname, 'db.json');
+const dbFilePath = path.resolve(__dirname, './database/db.json');
 const adapter = new FileSync(dbFilePath);
 const db = low(adapter);
 
