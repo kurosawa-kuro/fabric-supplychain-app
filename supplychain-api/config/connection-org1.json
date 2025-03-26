@@ -6,7 +6,7 @@
     "connection": {
       "timeout": {
         "peer": {
-          "endorser": "300"
+          "endorser": "5000"
         }
       }
     }
@@ -30,7 +30,8 @@
       },
       "grpcOptions": {
         "ssl-target-name-override": "peer0.org1.example.com",
-        "hostnameOverride": "peer0.org1.example.com"
+        "hostnameOverride": "peer0.org1.example.com",
+        "request-timeout": 5000
       }
     }
   },
@@ -53,7 +54,8 @@
       "url": "grpcs://orderer.example.com:7050",
       "grpcOptions": {
         "ssl-target-name-override": "orderer.example.com",
-        "hostnameOverride": "orderer.example.com"
+        "hostnameOverride": "orderer.example.com",
+        "request-timeout": 5000
       },
       "tlsCACerts": {
         "path": "/app/config/orderer-tls-cert.pem"

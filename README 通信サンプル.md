@@ -1,10 +1,13 @@
 cd supplychain-api
 docker build -t supplychain-api .
-docker run -it --rm \
-  -v $(pwd)/wallet:/app/wallet \
-  -v $(pwd)/config:/app/config \
+docker run --rm -it \
+  --network fabric_test \
   -p 3000:3000 \
-  supplychain-api
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/wallet:/app/wallet \
+  -e HFC_LOGGING='{"debug":"off","info":"off"}' \
+  supplychain-api:latest
+
 
 
 
