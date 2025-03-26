@@ -14,3 +14,10 @@ enroll:
 
 run-api:
 	node ~/dev/hyperledger-fabric-helloworld/api/server.js
+
+logs:
+	docker ps -a
+	docker logs $(docker ps -q --filter "name=dev-peer0")
+
+status:
+	curl http://localhost:3000/api/events | jq .
