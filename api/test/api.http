@@ -3,7 +3,7 @@ POST http://localhost:3000/api/part-event
 Content-Type: application/json
 
 {
-  "event_id": "EVT-002",
+  "event_id": "EVT-003",
   "part_id": "BAT-001",
   "status": "assembled",
   "timestamp": "2025-03-26T16:00:00Z",
@@ -14,12 +14,12 @@ Content-Type: application/json
 ###
 
 ### 🔍 オンチェーン取得：GET /api/query/:event_id
-GET http://localhost:3000/api/query/EVT-001
+GET http://localhost:3000/api/query/EVT-003
 
 ###
 
 ### 🔐 改ざん検証：GET /api/verify/:event_id
-GET http://localhost:3000/api/verify/EVT-001
+GET http://localhost:3000/api/verify/EVT-003
 
 ###
 

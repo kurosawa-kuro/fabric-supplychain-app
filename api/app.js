@@ -7,14 +7,21 @@ const { Gateway, Wallets } = require('fabric-network');
 const crypto = require('crypto');
 const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
-const adapter = new FileSync(path.resolve(__dirname, 'db.json'));
+
+// =======================
+//  DBサービス関連
+// =======================
+
+const dbFilePath = path.resolve(__dirname, 'db.json');
+const adapter = new FileSync(dbFilePath);
 const db = low(adapter);
 
-const app = express();
-app.use(express.json());
-
-function seedMasterData() {
-  const defaultData = {
+/**
+ * マスターデータを初期化／シード
+ * 毎回上書きするため、実行時にDBが更新される
+ */
+function initializeMasterData() {
+  const masterData = {
     parts: [
       {
         part_id: 'BAT-001',
@@ -46,161 +53,279 @@ function seedMasterData() {
     events: []
   };
 
-  db.defaults(defaultData).write();
+  db.defaults(masterData).write();
   console.log('✅ db.json にマスターデータをシードしました（常時上書き）');
 }
 
-seedMasterData();
+initializeMasterData();
 
+/**
+ * IDからパーツを取得
+ * @param {string} partId
+ */
+function getPartById(partId) {
+  return db.get('parts').find({ part_id: partId }).value();
+}
+
+/**
+ * IDからサプライヤーを取得
+ * @param {string} supplierId
+ */
+function getSupplierById(supplierId) {
+  return db.get('suppliers').find({ supplier_id: supplierId }).value();
+}
+
+/**
+ * IDからオペレーター（作業者）を取得
+ * @param {string} operatorId
+ */
+function getOperatorById(operatorId) {
+  return db.get('operators').find({ operator_id: operatorId }).value();
+}
+
+/**
+ * イベントをeventsに保存（同一event_idがあれば先に削除→追加）
+ * @param {object} newEvent
+ */
+function saveEvent(newEvent) {
+  db.get('events').remove({ event_id: newEvent.event_id }).write();
+  db.get('events').push(newEvent).write();
+}
+
+/**
+ * event_idに紐づくイベントを取得
+ * @param {string} eventId
+ */
+function getEventById(eventId) {
+  return db.get('events').find({ event_id: eventId }).value();
+}
+
+/**
+ * すべてのイベントを取得
+ */
+function getAllEvents() {
+  return db.get('events').value();
+}
+
+// =======================
+//  Fabricアクセス関連
+// =======================
+
+/**
+ * GatewayとContractを取得
+ * @returns {{ contract: Contract, gateway: Gateway }}
+ */
 async function getContract() {
   const ccpPath = path.resolve(__dirname, 'config', 'connection-org1.json');
   const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+
   const walletPath = path.resolve(__dirname, 'wallet');
   const wallet = await Wallets.newFileSystemWallet(walletPath);
+
   const gateway = new Gateway();
   await gateway.connect(ccp, {
     wallet,
     identity: 'appUser',
     discovery: { enabled: true, asLocalhost: true }
   });
+
   const network = await gateway.getNetwork('mychannel');
   const contract = network.getContract('part_event');
+
   return { contract, gateway };
 }
 
-function hashDimensionData(data) {
-  const ordered = Object.keys(data).sort().reduce((obj, key) => {
-    obj[key] = data[key];
-    return obj;
-  }, {});
-  return crypto.createHash('sha256').update(JSON.stringify(ordered)).digest('hex');
+// =======================
+//  ハッシュ作成関連
+// =======================
+
+/**
+ * 寸法などオブジェクトのハッシュを安定化（キー順でソート）して作成
+ * @param {object} data
+ * @returns {string} sha256ハッシュ文字列
+ */
+function createHashBySortedKeys(data) {
+  const sortedData = Object.keys(data)
+    .sort()
+    .reduce((obj, key) => {
+      obj[key] = data[key];
+      return obj;
+    }, {});
+  return crypto.createHash('sha256')
+    .update(JSON.stringify(sortedData))
+    .digest('hex');
 }
 
+// =======================
+//  Expressアプリ／ルーティング
+// =======================
+
+const app = express();
+app.use(express.json());
+
+/**
+ * パーツイベントを登録する
+ */
 app.post('/api/part-event', async (req, res) => {
-  const { event_id, part_id, status, timestamp, location, operator_id } = req.body;
+  const {
+    event_id: eventId,
+    part_id: partId,
+    status,
+    timestamp,
+    location,
+    operator_id: operatorId
+  } = req.body;
 
   try {
-    const part = db.get('parts').find({ part_id }).value();
-    const supplier = db.get('suppliers').find({ supplier_id: part?.supplier_id }).value();
-    const operator = db.get('operators').find({ operator_id }).value();
+    // マスターデータ取得
+    const partData = getPartById(partId);
+    const supplierData = partData ? getSupplierById(partData.supplier_id) : null;
+    const operatorData = getOperatorById(operatorId);
 
-    if (!part || !supplier || !operator) {
+    // マスターデータが足りない場合はエラー
+    if (!partData || !supplierData || !operatorData) {
       return res.status(400).json({ error: 'マスターデータが不足しています' });
     }
 
-    const partHash = hashDimensionData(part);
-    const supplierHash = hashDimensionData(supplier);
-    const operatorHash = hashDimensionData(operator);
+    // ハッシュ作成
+    const partHash = createHashBySortedKeys(partData);
+    const supplierHash = createHashBySortedKeys(supplierData);
+    const operatorHash = createHashBySortedKeys(operatorData);
 
+    // Fabricにイベント登録
     const { contract, gateway } = await getContract();
-    const result = await contract.submitTransaction(
+    const txResult = await contract.submitTransaction(
       'recordPartEvent',
-      event_id,
-      part_id,
+      eventId,
+      partId,
       status,
       timestamp,
       location,
-      operator_id,
+      operatorId,
       partHash,
       supplierHash,
       operatorHash
     );
     await gateway.disconnect();
 
-    // event_idの重複チェック（重複なら上書き）
-    db.get('events').remove({ event_id }).write();
+    // ローカルDBにもイベント保存（同じevent_idがあれば削除→追加）
+    const newEventData = {
+      event_id: eventId,
+      part_id: partId,
+      status,
+      timestamp,
+      location,
+      operator_id: operatorId,
+      part_hash: partHash,
+      supplier_hash: supplierHash,
+      operator_hash: operatorHash
+    };
+    saveEvent(newEventData);
 
-    db.get('events')
-      .push({
-        event_id,
-        part_id,
-        status,
-        timestamp,
-        location,
-        operator_id,
-        part_hash: partHash,
-        supplier_hash: supplierHash,
-        operator_hash: operatorHash
-      })
-      .write();
-
-    res.json({ success: true, txResult: result.toString() });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    res.json({ success: true, txResult: txResult.toString() });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+/**
+ * イベントをチェーン上から取得
+ */
 app.get('/api/query/:event_id', async (req, res) => {
-  const { event_id } = req.params;
+  const { event_id: eventId } = req.params;
   try {
     const { contract, gateway } = await getContract();
-    const result = await contract.evaluateTransaction('queryPartEvent', event_id);
+    const result = await contract.evaluateTransaction('queryPartEvent', eventId);
     await gateway.disconnect();
-    res.json({ event_id, result: JSON.parse(result.toString()) });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+
+    const chainData = JSON.parse(result.toString());
+    res.json({ event_id: eventId, result: chainData });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+/**
+ * チェーン上のハッシュとオフチェーンDBのハッシュを比較・検証
+ */
 app.get('/api/verify/:event_id', async (req, res) => {
-  const { event_id } = req.params;
+  const { event_id: eventId } = req.params;
   try {
-    const onChain = await getContract();
-    const result = await onChain.contract.evaluateTransaction('queryPartEvent', event_id);
-    const chainData = JSON.parse(result.toString());
-    await onChain.gateway.disconnect();
+    // チェーン上データを取得
+    const fabricConnection = await getContract();
+    const onChainResult = await fabricConnection.contract.evaluateTransaction('queryPartEvent', eventId);
+    const onChainData = JSON.parse(onChainResult.toString());
+    await fabricConnection.gateway.disconnect();
 
-    const offChain = db.get('events').find({ event_id }).value();
-    if (!offChain) {
+    // オフチェーンDBのイベントを取得
+    const offChainData = getEventById(eventId);
+    if (!offChainData) {
       return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
     }
 
-    const matches =
-      chainData.part_hash === offChain.part_hash &&
-      chainData.supplier_hash === offChain.supplier_hash &&
-      chainData.operator_hash === offChain.operator_hash;
+    // ハッシュ比較
+    const isMatch = (
+      onChainData.part_hash === offChainData.part_hash &&
+      onChainData.supplier_hash === offChainData.supplier_hash &&
+      onChainData.operator_hash === offChainData.operator_hash
+    );
 
     res.json({
-      event_id,
-      isValid: matches,
+      event_id: eventId,
+      isValid: isMatch,
       onChainHash: {
-        part_hash: chainData.part_hash,
-        supplier_hash: chainData.supplier_hash,
-        operator_hash: chainData.operator_hash
+        part_hash: onChainData.part_hash,
+        supplier_hash: onChainData.supplier_hash,
+        operator_hash: onChainData.operator_hash
       },
       offChainHash: {
-        part_hash: offChain.part_hash,
-        supplier_hash: offChain.supplier_hash,
-        operator_hash: offChain.operator_hash
+        part_hash: offChainData.part_hash,
+        supplier_hash: offChainData.supplier_hash,
+        operator_hash: offChainData.operator_hash
       }
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+/**
+ * すべてのイベントを取得
+ */
 app.get('/api/events', (req, res) => {
   try {
-    const events = db.get('events').value();
+    const events = getAllEvents();
     res.json(events);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 });
 
+// =======================
+//  アプリの起動前ウォレット確認
+// =======================
 (async () => {
-  const walletPath = path.resolve(__dirname, 'wallet');
-  const wallet = await Wallets.newFileSystemWallet(walletPath);
-  const appUser = await wallet.get('appUser');
-  if (!appUser) {
-    console.error('❌ appUser が wallet に存在しません。scripts/enrollAdmin.js と registerUser.js を実行してください。');
+  try {
+    const walletPath = path.resolve(__dirname, 'wallet');
+    const wallet = await Wallets.newFileSystemWallet(walletPath);
+    const appUser = await wallet.get('appUser');
+
+    if (!appUser) {
+      console.error(
+        '❌ appUser が wallet に存在しません。scripts/enrollAdmin.js と registerUser.js を実行してください。'
+      );
+      process.exit(1);
+    }
+
+    app.listen(3000, () => {
+      console.log('🚀 API server with Fabric SDK listening on port 3000');
+    });
+  } catch (error) {
+    console.error('ウォレット確認時エラー:', error.message);
     process.exit(1);
   }
-  app.listen(3000, () => {
-    console.log('🚀 API server with Fabric SDK listening on port 3000');
-  });
 })();
