@@ -1,0 +1,22 @@
+{
+  "ignore": [
+    "node_modules/*",
+    "dist/*",
+    "build/*",
+    "*.test.js",
+    "*.spec.js",
+    "coverage/*",
+    ".git/*",
+    "tmp/*",
+    "temp/*",
+    "db.json",
+    "db-test.json",
+    "wallet/*",
+    "*.json"
+  ],
+  "watch": [
+    "src/*",
+    "*.js"
+  ],
+  "ext": "js"
+} 
