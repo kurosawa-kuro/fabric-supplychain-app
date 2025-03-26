@@ -12,6 +12,7 @@ const FileSync = require('lowdb/adapters/FileSync');
 //  DBサービス関連
 // =======================
 
+
 const dbFilePath = path.resolve(__dirname, 'db.json');
 const adapter = new FileSync(dbFilePath);
 const db = low(adapter);
