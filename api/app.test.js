@@ -1,14 +1,31 @@
 const request = require('supertest');
 const { app } = require('./app');
 const { db } = require('./database/initializeMasterData');
+const { startServer, getServer } = require('./server');
 
 // fabric-network 全体をモック
 jest.mock('fabric-network');
 
 describe('Hyperledger Fabric Mocked Test', () => {
+  let server;
+
+  beforeAll(async () => {
+    // テスト用のサーバーを起動
+    server = await startServer();
+  });
+
   beforeEach(() => {
     // テスト前にDBクリア
     db.set('events', []).write();
+  });
+
+  afterAll((done) => {
+    // テスト完了後にサーバーをクローズ
+    if (server) {
+      server.close(done);
+    } else {
+      done();
+    }
   });
 
   it('POST /api/part-event => 200 OK, returns txResult', async () => {
