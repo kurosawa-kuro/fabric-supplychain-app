@@ -43,7 +43,7 @@ cd ~/dev/hyperledger-fabric-helloworld/api
 npm install
 node scripts/enrollAdmin.js
 node scripts/registerUser.js
-node app.js
+node server.js
 ```
 
 ---
