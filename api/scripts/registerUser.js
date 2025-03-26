@@ -4,13 +4,14 @@ const { Wallets } = require('fabric-network');
 const FabricCAServices = require('fabric-ca-client');
 
 async function main() {
-  const ccpPath = path.resolve(__dirname, 'connection-org1.json');
+  const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-org1.json');
   const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
   const caURL = ccp.certificateAuthorities['ca.org1.example.com'].url;
   const ca = new FabricCAServices(caURL);
 
-  const wallet = await Wallets.newFileSystemWallet(path.join(__dirname, 'wallet'));
+  const walletPath = path.resolve(__dirname, '..', 'wallet');
+  const wallet = await Wallets.newFileSystemWallet(walletPath);
 
   const userExists = await wallet.get('appUser');
   if (userExists) {
@@ -29,7 +30,7 @@ async function main() {
 
   await ca.register({
     enrollmentID: 'appUser',
-    enrollmentSecret: 'appUserpw',  // ← ★ここを明示
+    enrollmentSecret: 'appUserpw',
     affiliation: 'org1.department1',
     role: 'client',
   }, adminUser);

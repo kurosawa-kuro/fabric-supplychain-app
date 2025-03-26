@@ -1,3 +1,60 @@
+こちらがチャットベースでの最新版 `README.md` の「🚀 起動方法（完全クリーンスタート手順）」セクションです ✅  
+直接コピペして `README.md` に貼ってご活用ください！
+
+---
+
+## 🚀 起動方法（完全クリーンスタート手順）
+
+### 1. 前回の履歴を削除（念のため）
+
+```bash
+# Dockerコンテナをすべて停止・削除
+docker stop $(docker ps -q)
+docker rm $(docker ps -aq)
+
+# ※ volumeごと削除したい場合（慎重に）
+# docker system prune -af --volumes
+
+# Fabricネットワーク停止
+cd fabric-samples/test-network
+./network.sh down
+
+# wallet（SDK証明書）削除
+cd ../../api
+rm -rf wallet/*
+```
+
+---
+
+### 2. Fabricネットワーク起動
+
+```bash
+cd ~/dev/hyperledger-fabric-helloworld/fabric-samples/test-network
+./network.sh up createChannel -ca
+./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
+```
+
+---
+
+### 3. appUser登録とAPI起動
+
+```bash
+cd ~/dev/hyperledger-fabric-helloworld/api
+npm install
+node scripts/enrollAdmin.js
+node scripts/registerUser.js
+node app.js
+```
+
+---
+
+これで**完全な初期化 → Fabric構築 → チェーンコードデプロイ → API起動**のフローが迷わず実行できます💪  
+次に `reset-all.sh` や `Makefile`、Swagger追加に進める準備もバッチリです！必要なら声かけてください🔥
+
+
+
+
+
 
 # ⚡ EVバッテリー・サプライチェーン PoC（Hyperledger Fabric + Node.js）
 
@@ -20,16 +77,45 @@
 
 ### 1. Fabricネットワーク起動
 
+```
+# 掃除
+# FabricやAPIなど、関連するDockerコンテナをすべて停止
+docker ps -a
+
+# 該当するコンテナを停止・削除（または一括で）
+docker stop $(docker ps -q)
+docker rm $(docker ps -aq)
+
+# ※ volumeごと削除したい場合（開発環境のみで慎重に）
+# docker system prune -af --volumes
+
+cd fabric-samples/test-network
+./network.sh down
+
+./network.sh up createChannel -ca
+
+./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
+
+
+
+
+
+rm -rf wallet/*
+```
+
 ```bash
 cd fabric-samples/test-network
 ./network.sh up createChannel -ca
-./network.sh deployCC -ccn part_event -ccp ../chaincode/part_event -ccl node
+./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
 ```
 
-### 2. APIサーバ起動
+### 2. appUser登録とAPI起動
 
 ```bash
+cd api
 npm install
+node scripts/enrollAdmin.js
+node scripts/registerUser.js
 node app.js
 ```
 
@@ -81,179 +167,42 @@ node app.js
 
 ---
 
-## 📂 ディレクトリ構成
+## 📂 現在のディレクトリ構成（2025/03リファクタリング）
 
 ```
-.
-├── app.js               # APIサーバ
-├── db.json              # 部品・サプライヤ・オペレーターマスタ
-├── wallet/              # appUserウォレット（登録済み必要）
-├── connection-org1.json # Fabric接続定義
-└── README.md            # 本ドキュメント
+api/
+├── app.js
+├── config/
+│   └── connection-org1.json
+├── scripts/
+│   ├── enrollAdmin.js
+│   ├── enrollAppUser.js
+│   └── registerUser.js
+├── wallet/
+│   ├── admin.id
+│   └── appUser.id
+├── package.json
+└── package-lock.json
 ```
 
 ---
 
-## 📎 備考
-
-- `txId` も取得可能（submitTransaction実行時）
-- `ctx.stub.getTxID()` でチェーンコード側でも取得できる
-- `GetHistoryForKey()` で履歴追加も容易に可能
-
----
-
-## 🧰 今後の拡張候補
+## 🧰 今後の拡張候補（例）
 
 - Web UI（EJS/Reactなど）
 - event_id → txIdマッピング管理
 - Fabric Event機能の利用
 - 署名付きPDF検査ログのハッシュ連携
+- Docker化 → K8s対応（apps/ に分離予定）
 
 ---
 
-開発者：あなた
+## 🔖 備考
 
-完璧な構成が見えてきましたね。  
-以下は「**MVPを完成させ、将来的にK8sへ展開するまでの理想的な作業順序**」です👇
-
----
-
-# 🧭 作業順：EVバッテリーPoC構築ロードマップ（MVP〜K8s）
+- `txId` は `ctx.stub.getTxID()` で取得可能
+- 履歴管理は `GetHistoryForKey()` により容易に実装可能
+- Express SDKは `fabric-network` v2.5系を使用中
 
 ---
 
-## ✅ フェーズ①：オンチェーンPoC確立（ローカル or EC2）
-
-| ステップ | 内容 |
-|--------|------|
-| ① EC2作成 | Amazon Linux 2023 / Node.js / Docker / Fabric CLI |
-| ② Fabricネットワーク起動 | `network.sh up createChannel -ca` |
-| ③ チェーンコードデプロイ | `deployCC -ccn part_event ...`（単一組織） |
-| ④ `appUser` 登録 | `enrollAdmin.js`, `registerUser.js` などでウォレット生成 |
-| ⑤ `curl` でPOSTテスト | `POST /api/part-event` 成立確認 |
-| ⑥ `GET /api/verify/:event_id` | 改ざん検出の成功確認 |
-
----
-
-## ✅ フェーズ②：API化・UI追加（Express中心）
-
-| ステップ | 内容 |
-|--------|------|
-| ⑦ APIコード整理 | `app.js` を分割（ルーティング / SDK / hash utils） |
-| ⑧ lowdb連携精緻化 | `/db.json` をモジュール化 + CRUDエンドポイント追加も視野 |
-| ⑨ EJSビュー追加 | `views/form.ejs`, `views/result.ejs` で簡易UI（バッテリーイベント投稿） |
-| ⑩ サーバー再構成 | `server.js` + `routes/` 構成で保守性アップ（任意） |
-
----
-
-## ✅ フェーズ③：本番環境 & K8s展開準備
-
-| ステップ | 内容 |
-|--------|------|
-| ⑪ Docker化 | `Dockerfile` + `docker-compose.dev.yml` 作成（Fabric + API） |
-| ⑫ K8s構成検討 | シンプルな `k8s/api-deployment.yaml` 作成 |
-| ⑬ ingress + secrets | Fabric接続情報を `K8s secret` として管理 |
-| ⑭ Cloud環境検証 | EKS, GKE, minikube のいずれかで試験展開（PoC用） |
-
----
-
-## ✅ フェーズ④：実務・実証へ進化
-
-| ステップ | 内容 |
-|--------|------|
-| ⑮ `txId` ログ出力 | `ctx.stub.getTxID()` を含めて返却・記録 |
-| ⑯ 改ざんレポート機能 | `/api/verify/all` や `txId` 監査ログ一覧など |
-| ⑰ Redash/Athena連携 | JSONログ or DynamoDB出力（後段に分析） |
-| ⑱ 複数組織構成へ拡張 | PoC通過後、Endorsement Policy設定＆Org2追加 |
-
----
-
-## 🎯 今のあなたの状態（見立て）
-
-| 項目 | ステータス |
-|------|------------|
-| 単一組織Fabric + チェーンコード | ✅ 完了済み |
-| SDK + 改ざん検証API | ✅ 完了済み |
-| lowdb + JSONマスタ構成 | ✅ 完了済み |
-| curl検証 + Web対応準備 | ⏳ すぐできるレベル |
-| Docker / K8s対応 | 🔜 構成整理次第で進行可能 |
-
----
-
-必要であれば：
-- `Dockerfile` + `docker-compose.yml`（API＋Fabric CLI入り）
-- `views/form.ejs` 雛形
-- `routes/verify.js` など分割構成
-も提供できます！
-
-どこから手をつけますか？たとえば「EJS追加」から着手して「Docker化 → K8s」へ進む流れもオススメです。
-
-完璧なタイミングです。  
-今のフォルダ構成をマイクロサービス化とDocker/Kubernetes対応を見据えて、**以下のようにリファクタリング**するのがベストです ✅
-
----
-
-## ✅ 提案構成（Kubernetes & マイクロサービス & TypeScriptも見据え）
-
-```
-hyperledger-fabric-helloworld/
-├── apps/                             # マイクロサービス群（API）
-│   └── part-service/
-│       ├── src/
-│       │   ├── index.ts              # Expressエントリーポイント
-│       │   ├── routes/               # 各APIルート
-│       │   └── services/             # Fabric SDK / lowdbなどのロジック
-│       ├── swagger.config.ts         # Swagger設定
-│       ├── Dockerfile
-│       └── package.json
-│
-├── scripts/                          # 初期登録などのユーティリティ
-│   ├── enrollAdmin.ts
-│   ├── registerUser.ts
-│   ├── enrollAppUser.ts
-│
-├── wallet/                           # Fabric SDK用ウォレット（Git管理除外）
-│   ├── admin.id
-│   └── appUser.id
-│
-├── chaincode/                        # チェーンコード（オンチェーン）
-│   └── part_event/
-│       ├── index.js
-│       ├── package.json
-│       └── Dockerfile                # Chaincodeコンテナ化するなら
-│
-├── fabric-samples/                   # Fabric公式 test-network 一式
-│
-├── db/                               # lowdb or その他データ
-│   └── db.json
-│
-├── .env                              # 接続情報
-├── docker-compose.yml
-├── README.md
-└── docs/
-    └── roadmap.md など...
-```
-
----
-
-## 🔁 リファクタリングポイント解説
-
-| 旧パス          | 新パス                              | 理由 |
-|------------------|--------------------------------------|------|
-| `api/app.js`     | `apps/part-service/src/index.ts`     | サービス分離・TypeScript対応 |
-| `api/*.js`       | `scripts/` + `wallet/` に分離         | 登録系は本番環境で使わないためユーティリティ化 |
-| `chaincode/part_event` | そのまま維持                     | SDKとは分離されていて正しい構成 |
-| `connection-org1.json` | `.env` or `config/` に移す        | path解決しやすくなる（CI/CDでも） |
-
----
-
-## 🧠 今後のために
-
-- `apps/` 配下に `user-service`, `supplier-service`, `frontend` を追加可能
-- `scripts/` は CI/CD 初期化処理にも再利用可能
-- `wallet/` は `.gitignore` に含めるべき（秘密鍵含む）
-
----
-
-必要なら、**`mv`/`mkdir` コマンドでの一括リファクタリング用スクリプト**も出せます。  
-やりますか？💻🔥
+開発者：あなた（最高の判断力を持つ構築者）

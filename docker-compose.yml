@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  part-service:
+    build: ./api
+    container_name: part-service
+    ports:
+      - "3000:3000"
+    working_dir: /app
+    volumes:
+      - ./api:/app
+    command: node app.js

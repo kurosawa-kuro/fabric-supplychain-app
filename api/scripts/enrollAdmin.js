@@ -4,13 +4,15 @@ const { Wallets } = require('fabric-network');
 const FabricCAServices = require('fabric-ca-client');
 
 async function main() {
-  const ccpPath = path.resolve(__dirname, 'connection-org1.json');
+  const ccpPath = path.resolve(__dirname, '..', 'config', 'connection-org1.json');
   const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
   const caURL = ccp.certificateAuthorities['ca.org1.example.com'].url;
   const ca = new FabricCAServices(caURL);
 
-  const wallet = await Wallets.newFileSystemWallet(path.join(__dirname, 'wallet'));
+  const walletPath = path.resolve(__dirname, '..', 'wallet');
+  const wallet = await Wallets.newFileSystemWallet(walletPath);
+
   const identity = await wallet.get('admin');
   if (identity) {
     console.log('✔️ Admin identity already exists');
