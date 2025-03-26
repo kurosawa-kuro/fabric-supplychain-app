@@ -1,38 +1,3 @@
 {
-  "parts": [
-    {
-      "part_id": "BAT-001",
-      "model": "EV6000",
-      "capacity_ah": 60,
-      "voltage_v": 3.2,
-      "manufacturer": "ENEGEN Power Systems",
-      "manufactured_at": "2025-03-20",
-      "supplier_id": "SUP-101"
-    }
-  ],
-  "suppliers": [
-    {
-      "supplier_id": "SUP-101",
-      "name": "エネゲンパワーシステムズ株式会社",
-      "location": "福島県郡山市",
-      "certification": "ISO/TS 16949",
-      "material_type": "LiFePO4セル"
-    }
-  ],
-  "operators": [
-    {
-      "operator_id": "USR-9001",
-      "name": "佐藤 太一",
-      "role": "検査員",
-      "organization": "ENEGEN 第2製造所"
-    }
-  ],
-  "events": [
-    {
-      "event_id": "EVT-ABC"
-    },
-    {
-      "event_id": "EVT-XYZ"
-    }
-  ]
+  
 }

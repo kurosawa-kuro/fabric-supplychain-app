@@ -2,7 +2,9 @@ const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
 
-const dbFilePath = path.resolve(__dirname, './db.json');
+// 環境変数に応じてDBファイルを選択
+const dbFileName = process.env.NODE_ENV === 'test' ? 'db-test.json' : 'db-dev.json';
+const dbFilePath = path.resolve(__dirname, `./${dbFileName}`);
 const adapter = new FileSync(dbFilePath);
 const db = low(adapter);
 
@@ -44,7 +46,7 @@ function initializeMasterData() {
   };
 
   db.defaults(masterData).write();
-  console.log('✅ db.json にマスターデータをシードしました（常時上書き）');
+  console.log(`✅ ${dbFileName} にマスターデータをシードしました（常時上書き）`);
 }
 
 module.exports = {
