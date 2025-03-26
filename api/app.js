@@ -1,3 +1,9 @@
+// 1. /api/query-all
+// 全件取得して一覧化
+
+// 2. /api/verify/:event_id
+// オンチェーンのハッシュ vs オフチェーン再計算ハッシュの検証（改ざん検出）
+
 // Fabricチェーンコード（Node.js版）: part_event スキーマ対応 + SDK連携済みExpress API（JS）
 'use strict';
 
@@ -16,7 +22,7 @@ function hashDimensionData(data) {
     obj[key] = data[key];
     return obj;
   }, {});
-  
+
   const json = JSON.stringify(ordered);
   return crypto.createHash('sha256').update(json).digest('hex');
 }
@@ -25,7 +31,6 @@ function hashDimensionData(data) {
 app.post('/api/part-event', async (req, res) => {
   const { event_id, part_id, status, timestamp, location, operator_id } = req.body;
 
-  // 仮のハッシュ値を使用（実際はDBやAPIで取得して生成）
   const partHash = '0xabc123';
   const supplierHash = '0xdef456';
   const operatorHash = '0xghi789';
@@ -60,6 +65,34 @@ app.post('/api/part-event', async (req, res) => {
 
     await gateway.disconnect();
     res.json({ success: true, txResult: result.toString() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/query/:event_id → オンチェーンイベント取得
+app.get('/api/query/:event_id', async (req, res) => {
+  const { event_id } = req.params;
+  try {
+    const ccpPath = path.resolve(__dirname, 'connection-org1.json');
+    const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+
+    const wallet = await Wallets.newFileSystemWallet(path.join(__dirname, 'wallet'));
+    const gateway = new Gateway();
+    await gateway.connect(ccp, {
+      wallet,
+      identity: 'appUser',
+      discovery: { enabled: true, asLocalhost: true }
+    });
+
+    const network = await gateway.getNetwork('mychannel');
+    const contract = network.getContract('part_event');
+
+    const result = await contract.evaluateTransaction('queryPartEvent', event_id);
+    await gateway.disconnect();
+
+    res.json({ event_id, result: JSON.parse(result.toString()) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
