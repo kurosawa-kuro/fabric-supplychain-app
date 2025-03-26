@@ -24,3 +24,7 @@ curl -X POST http://localhost:3000/api/part-event \
   }'
 
 curl http://localhost:3000/api/query/EVT-001
+
+
+オフチェーン イベント テーブルを用意し
+イベント記録とハッシュ管理してみてはどうだろうか

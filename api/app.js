@@ -42,7 +42,8 @@ function seedMasterData() {
         role: '検査員',
         organization: 'ENEGEN 第2製造所'
       }
-    ]
+    ],
+    events: []
   };
 
   db.defaults(defaultData).write();
@@ -105,6 +106,24 @@ app.post('/api/part-event', async (req, res) => {
       operatorHash
     );
     await gateway.disconnect();
+
+    // event_idの重複チェック（重複なら上書き）
+    db.get('events').remove({ event_id }).write();
+
+    db.get('events')
+      .push({
+        event_id,
+        part_id,
+        status,
+        timestamp,
+        location,
+        operator_id,
+        part_hash: partHash,
+        supplier_hash: supplierHash,
+        operator_hash: operatorHash
+      })
+      .write();
+
     res.json({ success: true, txResult: result.toString() });
   } catch (err) {
     console.error(err);
@@ -119,6 +138,44 @@ app.get('/api/query/:event_id', async (req, res) => {
     const result = await contract.evaluateTransaction('queryPartEvent', event_id);
     await gateway.disconnect();
     res.json({ event_id, result: JSON.parse(result.toString()) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/verify/:event_id', async (req, res) => {
+  const { event_id } = req.params;
+  try {
+    const onChain = await getContract();
+    const result = await onChain.contract.evaluateTransaction('queryPartEvent', event_id);
+    const chainData = JSON.parse(result.toString());
+    await onChain.gateway.disconnect();
+
+    const offChain = db.get('events').find({ event_id }).value();
+    if (!offChain) {
+      return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
+    }
+
+    const matches =
+      chainData.part_hash === offChain.part_hash &&
+      chainData.supplier_hash === offChain.supplier_hash &&
+      chainData.operator_hash === offChain.operator_hash;
+
+    res.json({
+      event_id,
+      isValid: matches,
+      onChainHash: {
+        part_hash: chainData.part_hash,
+        supplier_hash: chainData.supplier_hash,
+        operator_hash: chainData.operator_hash
+      },
+      offChainHash: {
+        part_hash: offChain.part_hash,
+        supplier_hash: offChain.supplier_hash,
+        operator_hash: offChain.operator_hash
+      }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
