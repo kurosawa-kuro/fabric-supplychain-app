@@ -16,6 +16,7 @@ function hashDimensionData(data) {
     obj[key] = data[key];
     return obj;
   }, {});
+  
   const json = JSON.stringify(ordered);
   return crypto.createHash('sha256').update(json).digest('hex');
 }
