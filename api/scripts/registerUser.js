@@ -1,3 +1,5 @@
+// /home/ec2-user/dev/hyperledger-fabric-helloworld/api/scripts/registerUser.js
+
 const fs = require('fs');
 const path = require('path');
 const { Wallets } = require('fabric-network');

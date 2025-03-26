@@ -1,12 +1,15 @@
-rm -rf api/wallet/*
+rm -rf ~/dev/hyperledger-fabric-helloworld/api/wallet/*
 
 # 修正後の scripts 実行
-node api/scripts/enrollAdmin.js
-node api/scripts/registerUser.js
+node ~/dev/hyperledger-fabric-helloworld/api/scripts/enrollAdmin.js
+node ~/dev/hyperledger-fabric-helloworld/api/scripts/registerUser.js
 
 # 確認
-ls -l api/wallet/
+ls -l ~/dev/hyperledger-fabric-helloworld/api/wallet/
 # → admin.id / appUser.id ができていれば OK
+
+cd ~/dev/hyperledger-fabric-helloworld/api/
+node app.js
 
 
 curl -X POST http://localhost:3000/api/part-event \
