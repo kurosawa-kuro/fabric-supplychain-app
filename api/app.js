@@ -182,6 +182,25 @@ app.get('/api/verify/:event_id', async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
-  console.log('🚀 API server with Fabric SDK listening on port 3000');
+app.get('/api/events', (req, res) => {
+  try {
+    const events = db.get('events').value();
+    res.json(events);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+(async () => {
+  const walletPath = path.resolve(__dirname, 'wallet');
+  const wallet = await Wallets.newFileSystemWallet(walletPath);
+  const appUser = await wallet.get('appUser');
+  if (!appUser) {
+    console.error('❌ appUser が wallet に存在しません。scripts/enrollAdmin.js と registerUser.js を実行してください。');
+    process.exit(1);
+  }
+  app.listen(3000, () => {
+    console.log('🚀 API server with Fabric SDK listening on port 3000');
+  });
+})();

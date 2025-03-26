@@ -1,0 +1,27 @@
+### 🔹 オンチェーン登録：POST /api/part-event
+POST http://localhost:3000/api/part-event
+Content-Type: application/json
+
+{
+  "event_id": "EVT-002",
+  "part_id": "BAT-001",
+  "status": "assembled",
+  "timestamp": "2025-03-26T16:00:00Z",
+  "location": "ENEGEN 本社工場",
+  "operator_id": "USR-9001"
+}
+
+###
+
+### 🔍 オンチェーン取得：GET /api/query/:event_id
+GET http://localhost:3000/api/query/EVT-001
+
+###
+
+### 🔐 改ざん検証：GET /api/verify/:event_id
+GET http://localhost:3000/api/verify/EVT-001
+
+###
+
+### 📦 イベント一覧取得：GET /api/events
+GET http://localhost:3000/api/events
