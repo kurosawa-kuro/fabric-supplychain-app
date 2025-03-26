@@ -6,6 +6,8 @@ const fs = require('fs');
 const { Gateway, Wallets } = require('fabric-network');
 const { db, initializeMasterData } = require('./database/initializeMasterData');
 const { createHashBySortedKeys } = require('./util');
+const { assignRequestId } = require('./middleware/request-id');
+const { log } = require('./logger');
 
 // =======================
 //  DBサービス関連
@@ -103,6 +105,7 @@ async function getContract() {
 // =======================
 
 const app = express();
+app.use(assignRequestId);
 app.use(express.json());
 
 /**
@@ -118,6 +121,8 @@ app.post('/api/part-event', async (req, res) => {
     operator_id: operatorId
   } = req.body;
 
+  log(req, `🔔 登録要求: event_id=${eventId}, part_id=${partId}, operator_id=${operatorId}`);
+
   try {
     // マスターデータ取得
     const partData = getPartById(partId);
@@ -126,6 +131,7 @@ app.post('/api/part-event', async (req, res) => {
 
     // マスターデータが足りない場合はエラー
     if (!partData || !supplierData || !operatorData) {
+      log(req, `❌ マスターデータ不足: part_id=${partId}, operator_id=${operatorId}`);
       return res.status(400).json({ error: 'マスターデータが不足しています' });
     }
 
@@ -164,8 +170,10 @@ app.post('/api/part-event', async (req, res) => {
     };
     saveEvent(newEventData);
 
+    log(req, `✅ チェーン登録成功: event_id=${eventId}`);
     res.json({ success: true, txResult: txResult.toString() });
   } catch (error) {
+    log(req, `❌ エラー: ${error.message}`);
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -176,14 +184,18 @@ app.post('/api/part-event', async (req, res) => {
  */
 app.get('/api/query/:event_id', async (req, res) => {
   const { event_id: eventId } = req.params;
+  log(req, `🔍 イベント検索: event_id=${eventId}`);
+
   try {
     const { contract, gateway } = await getContract();
     const result = await contract.evaluateTransaction('queryPartEvent', eventId);
     await gateway.disconnect();
 
     const chainData = JSON.parse(result.toString());
+    log(req, `✅ イベント取得成功: event_id=${eventId}`);
     res.json({ event_id: eventId, result: chainData });
   } catch (error) {
+    log(req, `❌ エラー: ${error.message}`);
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -194,6 +206,8 @@ app.get('/api/query/:event_id', async (req, res) => {
  */
 app.get('/api/verify/:event_id', async (req, res) => {
   const { event_id: eventId } = req.params;
+  log(req, `🔍 ハッシュ検証: event_id=${eventId}`);
+
   try {
     // チェーン上データを取得
     const fabricConnection = await getContract();
@@ -204,6 +218,7 @@ app.get('/api/verify/:event_id', async (req, res) => {
     // オフチェーンDBのイベントを取得
     const offChainData = getEventById(eventId);
     if (!offChainData) {
+      log(req, `❌ オフチェーンイベント未検出: event_id=${eventId}`);
       return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
     }
 
@@ -214,6 +229,7 @@ app.get('/api/verify/:event_id', async (req, res) => {
       onChainData.operator_hash === offChainData.operator_hash
     );
 
+    log(req, `✅ ハッシュ検証完了: event_id=${eventId}, isMatch=${isMatch}`);
     res.json({
       event_id: eventId,
       isValid: isMatch,
@@ -229,6 +245,7 @@ app.get('/api/verify/:event_id', async (req, res) => {
       }
     });
   } catch (error) {
+    log(req, `❌ エラー: ${error.message}`);
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -238,10 +255,13 @@ app.get('/api/verify/:event_id', async (req, res) => {
  * すべてのイベントを取得
  */
 app.get('/api/events', (req, res) => {
+  log(req, '🔍 全イベント取得要求');
   try {
     const events = getAllEvents();
+    log(req, `✅ 全イベント取得成功: ${events.length}件`);
     res.json(events);
   } catch (error) {
+    log(req, `❌ エラー: ${error.message}`);
     console.error(error);
     res.status(500).json({ error: error.message });
   }

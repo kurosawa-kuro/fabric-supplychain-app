@@ -3,7 +3,8 @@
     "express": "^4.21.2",
     "fabric-ca-client": "^2.2.20",
     "fabric-network": "^2.2.20",
-    "lowdb": "^1.0.0"
+    "lowdb": "^1.0.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
