@@ -27,3 +27,4 @@ GET http://localhost:3000/api/verify/{{event_id}}
 
 ### 📦 イベント一覧取得：GET /api/events
 GET http://localhost:3000/api/events
+
