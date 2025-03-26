@@ -272,3 +272,6 @@ app.get('/api/events', (req, res) => {
     process.exit(1);
   }
 })();
+
+// アプリケーションをエクスポート
+module.exports = { app };
