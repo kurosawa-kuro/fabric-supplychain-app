@@ -26,7 +26,7 @@ rm -rf wallet/*
 
 ---
 
-### 2. Fabricネットワーク起動
+### 2. Fabricネットワーク起動（インスタンス停止後、再開する場合はここから）
 
 ```bash
 cd ~/dev/hyperledger-fabric-helloworld/fabric-samples/test-network

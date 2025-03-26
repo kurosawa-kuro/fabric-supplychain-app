@@ -13,4 +13,4 @@ enroll:
 	node ~/dev/hyperledger-fabric-helloworld/api/scripts/registerUser.js
 
 run-api:
-	node ~/dev/hyperledger-fabric-helloworld/api/app.js
+	node ~/dev/hyperledger-fabric-helloworld/api/server.js
