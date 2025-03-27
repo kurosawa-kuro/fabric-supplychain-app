@@ -9,7 +9,7 @@ jest.mock('fabric-network');
 // テスト用のDBファイルを指定
 process.env.DB_FILE = 'db-test.json';
 
-describe('Hyperledger Fabric Mocked Test', () => {
+describe('Hyperledger Fabric モックテスト', () => {
   let server;
 
   beforeAll(async () => {
@@ -31,7 +31,7 @@ describe('Hyperledger Fabric Mocked Test', () => {
     }
   });
 
-  it('POST /api/part-event => 200 OK, returns txResult', async () => {
+  it('部品イベント登録API: 正常系 - トランザクション結果が返却されること', async () => {
     const res = await request(app)
       .post('/api/part-event')
       .send({
@@ -52,7 +52,7 @@ describe('Hyperledger Fabric Mocked Test', () => {
     expect(savedEvent.status).toBe('assembled');
   });
 
-  it('POST /api/part-event => 400 NG, missing master data', async () => {
+  it('部品イベント登録API: 異常系 - マスターデータ不足時にエラーが返却されること', async () => {
     const res = await request(app)
       .post('/api/part-event')
       .send({
@@ -68,7 +68,7 @@ describe('Hyperledger Fabric Mocked Test', () => {
     expect(res.body).toHaveProperty('error', 'マスターデータが不足しています');
   });
 
-  it('GET /api/query/:event_id => 200 OK, returns chain data', async () => {
+  it('イベント検索API: 正常系 - チェーンコードのデータが返却されること', async () => {
     await request(app)
       .post('/api/part-event')
       .send({
@@ -86,7 +86,7 @@ describe('Hyperledger Fabric Mocked Test', () => {
     expect(res.body.result).toHaveProperty('part_hash', 'mockPartHash');
   });
 
-  it('GET /api/events => 200 OK, returns array of events', async () => {
+  it('イベント一覧取得API: 正常系 - イベントの配列が返却されること', async () => {
     db.get('events').push({ event_id: 'EVT-ABC' }).write();
     db.get('events').push({ event_id: 'EVT-XYZ' }).write();
 
