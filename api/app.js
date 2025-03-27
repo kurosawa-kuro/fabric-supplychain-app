@@ -2,101 +2,11 @@
 
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-const { Gateway, Wallets } = require('fabric-network');
-const { db, initializeMasterData } = require('./database/initializeMasterData');
 const { createHashBySortedKeys } = require('./util');
 const client = require('prom-client');
 const METRICS = require('./metrics');
-
-// =======================
-//  Constants & Configuration
-// =======================
-
-const APP_CONFIG = {
-  WALLET_PATH: path.resolve(__dirname, 'wallet'),
-  CCP_PATH: path.resolve(__dirname, 'config', 'connection-org1.json'),
-  IDENTITY: 'appUser',
-  CHANNEL_NAME: 'mychannel',
-  CONTRACT_NAME: 'part_event'
-};
-
-// =======================
-//  Database Operations
-// =======================
-
-const DB_OPERATIONS = {
-  // Initialize master data
-  initialize: () => {
-    initializeMasterData();
-  },
-
-  // Part operations
-  getPartById: (partId) => {
-    return db.get('parts').find({ part_id: partId }).value();
-  },
-
-  // Supplier operations
-  getSupplierById: (supplierId) => {
-    return db.get('suppliers').find({ supplier_id: supplierId }).value();
-  },
-
-  // Operator operations
-  getOperatorById: (operatorId) => {
-    return db.get('operators').find({ operator_id: operatorId }).value();
-  },
-
-  // Event operations
-  saveEvent: (newEvent) => {
-    db.get('events').remove({ event_id: newEvent.event_id }).write();
-    db.get('events').push(newEvent).write();
-  },
-
-  getEventById: (eventId) => {
-    return db.get('events').find({ event_id: eventId }).value();
-  },
-
-  getAllEvents: () => {
-    return db.get('events').value();
-  }
-};
-
-// Initialize database
-DB_OPERATIONS.initialize();
-
-// =======================
-//  Fabric Network Operations
-// =======================
-
-const FABRIC_OPERATIONS = {
-  getContract: async () => {
-    const ccp = JSON.parse(fs.readFileSync(APP_CONFIG.CCP_PATH, 'utf8'));
-    const wallet = await Wallets.newFileSystemWallet(APP_CONFIG.WALLET_PATH);
-
-    const gateway = new Gateway();
-    await gateway.connect(ccp, {
-      wallet,
-      identity: APP_CONFIG.IDENTITY,
-      discovery: { enabled: true, asLocalhost: true }
-    });
-
-    const network = await gateway.getNetwork(APP_CONFIG.CHANNEL_NAME);
-    const contract = network.getContract(APP_CONFIG.CONTRACT_NAME);
-
-    return { contract, gateway };
-  },
-
-  recordPartEvent: async (contract, params) => {
-    return await contract.submitTransaction(
-      'recordPartEvent',
-      ...params
-    );
-  },
-
-  queryPartEvent: async (contract, eventId) => {
-    return await contract.evaluateTransaction('queryPartEvent', eventId);
-  }
-};
+const onchainService = require('./services/onchainService');
+const offchainService = require('./services/offchainService');
 
 // =======================
 //  Express Application Setup
@@ -132,9 +42,9 @@ const ROUTE_HANDLERS = {
     } = req.body;
 
     try {
-      const partData = DB_OPERATIONS.getPartById(partId);
-      const supplierData = partData ? DB_OPERATIONS.getSupplierById(partData.supplier_id) : null;
-      const operatorData = DB_OPERATIONS.getOperatorById(operatorId);
+      const partData = offchainService.getPartById(partId);
+      const supplierData = partData ? offchainService.getSupplierById(partData.supplier_id) : null;
+      const operatorData = offchainService.getOperatorById(operatorId);
 
       if (!partData || !supplierData || !operatorData) {
         METRICS.errorCounter.inc({ operation: 'recordPartEvent', error_type: 'missing_master_data' });
@@ -145,12 +55,10 @@ const ROUTE_HANDLERS = {
       const supplierHash = createHashBySortedKeys(supplierData);
       const operatorHash = createHashBySortedKeys(operatorData);
 
-      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
-      const txResult = await FABRIC_OPERATIONS.recordPartEvent(contract, [
+      const txResult = await onchainService.recordPartEvent([
         eventId, partId, status, timestamp, location, operatorId,
         partHash, supplierHash, operatorHash
       ]);
-      await gateway.disconnect();
 
       const newEventData = {
         event_id: eventId,
@@ -163,7 +71,7 @@ const ROUTE_HANDLERS = {
         supplier_hash: supplierHash,
         operator_hash: operatorHash
       };
-      DB_OPERATIONS.saveEvent(newEventData);
+      offchainService.saveEvent(newEventData);
 
       METRICS.transactionCounter.inc({ operation: 'recordPartEvent', status: 'success' });
       endTimer({ operation: 'recordPartEvent' });
@@ -186,10 +94,7 @@ const ROUTE_HANDLERS = {
 
     const { event_id: eventId } = req.params;
     try {
-      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
-      const result = await FABRIC_OPERATIONS.queryPartEvent(contract, eventId);
-      await gateway.disconnect();
-
+      const result = await onchainService.queryPartEvent(eventId);
       const chainData = JSON.parse(result.toString());
       METRICS.transactionCounter.inc({ operation: 'queryPartEvent', status: 'success' });
       endTimer({ operation: 'queryPartEvent' });
@@ -212,12 +117,10 @@ const ROUTE_HANDLERS = {
 
     const { event_id: eventId } = req.params;
     try {
-      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
-      const onChainResult = await FABRIC_OPERATIONS.queryPartEvent(contract, eventId);
+      const onChainResult = await onchainService.queryPartEvent(eventId);
       const onChainData = JSON.parse(onChainResult.toString());
-      await gateway.disconnect();
 
-      const offChainData = DB_OPERATIONS.getEventById(eventId);
+      const offChainData = offchainService.getEventById(eventId);
       if (!offChainData) {
         METRICS.errorCounter.inc({ operation: 'verifyPartEvent', error_type: 'event_not_found' });
         return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
@@ -262,7 +165,7 @@ const ROUTE_HANDLERS = {
     METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
 
     try {
-      const events = DB_OPERATIONS.getAllEvents();
+      const events = offchainService.getAllEvents();
       METRICS.transactionCounter.inc({ operation: 'getAllEvents', status: 'success' });
       endTimer({ operation: 'getAllEvents' });
 
