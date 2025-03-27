@@ -1,6 +1,4 @@
-以下は面接官向けに日本語で記載した「Hyperledger Fabric サプライチェーンアプリケーション」の概要です。
 
----
 
 # Hyperledger Fabric サプライチェーンアプリケーション
 
