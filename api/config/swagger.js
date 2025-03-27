@@ -33,29 +33,38 @@ const swaggerOptions = {
           properties: {
             event_id: {
               type: 'string',
-              description: 'イベントID'
+              description: 'イベントID',
+              example: 'EVTA-001',
+              pattern: '^EVT[A-Z]-\\d{3}$'
             },
             part_id: {
               type: 'string',
-              description: '部品ID'
+              description: '部品ID',
+              example: 'BAT-001',
+              pattern: '^[A-Z]+-\\d{3}$'
             },
             status: {
               type: 'string',
               description: 'ステータス',
-              enum: ['created', 'in_progress', 'completed', 'error']
+              enum: ['assembled', 'testing', 'completed', 'shipped'],
+              example: 'assembled'
             },
             timestamp: {
               type: 'string',
               format: 'date-time',
-              description: 'イベント発生時刻'
+              description: 'イベント発生時刻',
+              example: '2025-03-26T16:00:00Z'
             },
             location: {
               type: 'string',
-              description: '場所'
+              description: '場所',
+              example: 'ENEGEN 本社工場'
             },
             operator_id: {
               type: 'string',
-              description: 'オペレーターID'
+              description: 'オペレーターID',
+              example: 'USR-9001',
+              pattern: '^USR-\\d{4}$'
             }
           }
         },
