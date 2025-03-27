@@ -6,320 +6,329 @@ const fs = require('fs');
 const { Gateway, Wallets } = require('fabric-network');
 const { db, initializeMasterData } = require('./database/initializeMasterData');
 const { createHashBySortedKeys } = require('./util');
-const client = require('prom-client');  // Prometheusライブラリのインポート
+const client = require('prom-client');
 
 // =======================
-//  Prometheusメトリクス設定
+//  Constants & Configuration
 // =======================
 
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics();  // デフォルトメトリクスの収集
-
-// リクエストカウンター
-const requestCounter = new client.Counter({
-  name: 'express_app_requests_total',
-  help: 'Total number of requests received by the Express app',
-  labelNames: ['method', 'route'],
-});
-
-// トランザクション実行時間
-const transactionDuration = new client.Histogram({
-  name: 'fabric_transaction_duration_seconds',
-  help: 'Duration of Fabric transactions',
-  labelNames: ['operation'],
-  buckets: [0.1, 0.5, 1, 2, 5],
-});
-
-// トランザクション成功/失敗カウンター
-const transactionCounter = new client.Counter({
-  name: 'fabric_transactions_total',
-  help: 'Total number of Fabric transactions',
-  labelNames: ['operation', 'status'],
-});
-
-// エラーカウンター
-const errorCounter = new client.Counter({
-  name: 'fabric_errors_total',
-  help: 'Total number of Fabric-related errors',
-  labelNames: ['operation', 'error_type'],
-});
+const APP_CONFIG = {
+  WALLET_PATH: path.resolve(__dirname, 'wallet'),
+  CCP_PATH: path.resolve(__dirname, 'config', 'connection-org1.json'),
+  IDENTITY: 'appUser',
+  CHANNEL_NAME: 'mychannel',
+  CONTRACT_NAME: 'part_event'
+};
 
 // =======================
-//  DBサービス関連
+//  Prometheus Metrics Configuration
 // =======================
 
-/**
- * マスターデータを初期化
- */
-initializeMasterData();
+const METRICS = {
+  // Initialize default metrics
+  init: () => {
+    client.collectDefaultMetrics();
+  },
 
-/**
- * IDからパーツを取得
- * @param {string} partId
- */
-function getPartById(partId) {
-  return db.get('parts').find({ part_id: partId }).value();
-}
+  // Request counter
+  requestCounter: new client.Counter({
+    name: 'express_app_requests_total',
+    help: 'Total number of requests received by the Express app',
+    labelNames: ['method', 'route'],
+  }),
 
-/**
- * IDからサプライヤーを取得
- * @param {string} supplierId
- */
-function getSupplierById(supplierId) {
-  return db.get('suppliers').find({ supplier_id: supplierId }).value();
-}
+  // Transaction duration
+  transactionDuration: new client.Histogram({
+    name: 'fabric_transaction_duration_seconds',
+    help: 'Duration of Fabric transactions',
+    labelNames: ['operation'],
+    buckets: [0.1, 0.5, 1, 2, 5],
+  }),
 
-/**
- * IDからオペレーター（作業者）を取得
- * @param {string} operatorId
- */
-function getOperatorById(operatorId) {
-  return db.get('operators').find({ operator_id: operatorId }).value();
-}
+  // Transaction counter
+  transactionCounter: new client.Counter({
+    name: 'fabric_transactions_total',
+    help: 'Total number of Fabric transactions',
+    labelNames: ['operation', 'status'],
+  }),
 
-/**
- * イベントをeventsに保存（同一event_idがあれば先に削除→追加）
- * @param {object} newEvent
- */
-function saveEvent(newEvent) {
-  db.get('events').remove({ event_id: newEvent.event_id }).write();
-  db.get('events').push(newEvent).write();
-}
+  // Error counter
+  errorCounter: new client.Counter({
+    name: 'fabric_errors_total',
+    help: 'Total number of Fabric-related errors',
+    labelNames: ['operation', 'error_type'],
+  })
+};
 
-/**
- * event_idに紐づくイベントを取得
- * @param {string} eventId
- */
-function getEventById(eventId) {
-  return db.get('events').find({ event_id: eventId }).value();
-}
-
-/**
- * すべてのイベントを取得
- */
-function getAllEvents() {
-  return db.get('events').value();
-}
+// Initialize metrics
+METRICS.init();
 
 // =======================
-//  Fabricアクセス関連
+//  Database Operations
 // =======================
 
-/**
- * GatewayとContractを取得
- * @returns {{ contract: Contract, gateway: Gateway }}
- */
-async function getContract() {
-  const ccpPath = path.resolve(__dirname, 'config', 'connection-org1.json');
-  const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+const DB_OPERATIONS = {
+  // Initialize master data
+  initialize: () => {
+    initializeMasterData();
+  },
 
-  const walletPath = path.resolve(__dirname, 'wallet');
-  const wallet = await Wallets.newFileSystemWallet(walletPath);
+  // Part operations
+  getPartById: (partId) => {
+    return db.get('parts').find({ part_id: partId }).value();
+  },
 
-  const gateway = new Gateway();
-  await gateway.connect(ccp, {
-    wallet,
-    identity: 'appUser',
-    discovery: { enabled: true, asLocalhost: true }
-  });
+  // Supplier operations
+  getSupplierById: (supplierId) => {
+    return db.get('suppliers').find({ supplier_id: supplierId }).value();
+  },
 
-  const network = await gateway.getNetwork('mychannel');
-  const contract = network.getContract('part_event');
+  // Operator operations
+  getOperatorById: (operatorId) => {
+    return db.get('operators').find({ operator_id: operatorId }).value();
+  },
 
-  return { contract, gateway };
-}
+  // Event operations
+  saveEvent: (newEvent) => {
+    db.get('events').remove({ event_id: newEvent.event_id }).write();
+    db.get('events').push(newEvent).write();
+  },
+
+  getEventById: (eventId) => {
+    return db.get('events').find({ event_id: eventId }).value();
+  },
+
+  getAllEvents: () => {
+    return db.get('events').value();
+  }
+};
+
+// Initialize database
+DB_OPERATIONS.initialize();
 
 // =======================
-//  Expressアプリ／ルーティング
+//  Fabric Network Operations
+// =======================
+
+const FABRIC_OPERATIONS = {
+  getContract: async () => {
+    const ccp = JSON.parse(fs.readFileSync(APP_CONFIG.CCP_PATH, 'utf8'));
+    const wallet = await Wallets.newFileSystemWallet(APP_CONFIG.WALLET_PATH);
+
+    const gateway = new Gateway();
+    await gateway.connect(ccp, {
+      wallet,
+      identity: APP_CONFIG.IDENTITY,
+      discovery: { enabled: true, asLocalhost: true }
+    });
+
+    const network = await gateway.getNetwork(APP_CONFIG.CHANNEL_NAME);
+    const contract = network.getContract(APP_CONFIG.CONTRACT_NAME);
+
+    return { contract, gateway };
+  },
+
+  recordPartEvent: async (contract, params) => {
+    return await contract.submitTransaction(
+      'recordPartEvent',
+      ...params
+    );
+  },
+
+  queryPartEvent: async (contract, eventId) => {
+    return await contract.evaluateTransaction('queryPartEvent', eventId);
+  }
+};
+
+// =======================
+//  Express Application Setup
 // =======================
 
 const app = express();
 app.use(express.json());
 
-// メトリクスエンドポイント
-app.get('/metrics', async (req, res) => {
-  // メトリクスを収集
-  requestCounter.inc({ method: req.method, route: req.originalUrl });  // リクエストのカウントをインクリメント
-  res.set('Content-Type', client.register.contentType);
-  res.end(await client.register.metrics());  // メトリクスをPrometheusに返す
-});
+// =======================
+//  Route Handlers
+// =======================
 
-/**
- * パーツイベントを登録する
- */
-app.post('/api/part-event', async (req, res) => {
-  const endTimer = transactionDuration.startTimer();
-  requestCounter.inc({ method: req.method, route: req.originalUrl });
+const ROUTE_HANDLERS = {
+  // Metrics endpoint
+  getMetrics: async (req, res) => {
+    METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  },
 
-  const {
-    event_id: eventId,
-    part_id: partId,
-    status,
-    timestamp,
-    location,
-    operator_id: operatorId
-  } = req.body;
+  // Part event registration
+  postPartEvent: async (req, res) => {
+    const endTimer = METRICS.transactionDuration.startTimer();
+    METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
 
-  try {
-    // マスターデータ取得
-    const partData = getPartById(partId);
-    const supplierData = partData ? getSupplierById(partData.supplier_id) : null;
-    const operatorData = getOperatorById(operatorId);
-
-    if (!partData || !supplierData || !operatorData) {
-      errorCounter.inc({ operation: 'recordPartEvent', error_type: 'missing_master_data' });
-      return res.status(400).json({ error: 'マスターデータが不足しています' });
-    }
-
-    const partHash = createHashBySortedKeys(partData);
-    const supplierHash = createHashBySortedKeys(supplierData);
-    const operatorHash = createHashBySortedKeys(operatorData);
-
-    const { contract, gateway } = await getContract();
-    const txResult = await contract.submitTransaction(
-      'recordPartEvent',
-      eventId,
-      partId,
-      status,
-      timestamp,
-      location,
-      operatorId,
-      partHash,
-      supplierHash,
-      operatorHash
-    );
-    await gateway.disconnect();
-
-    const newEventData = {
+    const {
       event_id: eventId,
       part_id: partId,
       status,
       timestamp,
       location,
-      operator_id: operatorId,
-      part_hash: partHash,
-      supplier_hash: supplierHash,
-      operator_hash: operatorHash
-    };
-    saveEvent(newEventData);
+      operator_id: operatorId
+    } = req.body;
 
-    transactionCounter.inc({ operation: 'recordPartEvent', status: 'success' });
-    endTimer({ operation: 'recordPartEvent' });
+    try {
+      const partData = DB_OPERATIONS.getPartById(partId);
+      const supplierData = partData ? DB_OPERATIONS.getSupplierById(partData.supplier_id) : null;
+      const operatorData = DB_OPERATIONS.getOperatorById(operatorId);
 
-    console.log('アクション：イベント登録');
-    res.json({ success: true, txResult: txResult.toString() });
-  } catch (error) {
-    transactionCounter.inc({ operation: 'recordPartEvent', status: 'failure' });
-    errorCounter.inc({ operation: 'recordPartEvent', error_type: error.name });
-    endTimer({ operation: 'recordPartEvent' });
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * イベントをチェーン上から取得
- */
-app.get('/api/query/:event_id', async (req, res) => {
-  const endTimer = transactionDuration.startTimer();
-  requestCounter.inc({ method: req.method, route: req.originalUrl });
-
-  const { event_id: eventId } = req.params;
-  try {
-    const { contract, gateway } = await getContract();
-    const result = await contract.evaluateTransaction('queryPartEvent', eventId);
-    await gateway.disconnect();
-
-    const chainData = JSON.parse(result.toString());
-    transactionCounter.inc({ operation: 'queryPartEvent', status: 'success' });
-    endTimer({ operation: 'queryPartEvent' });
-
-    console.log('アクション：チェーン上データ取得');
-    res.json({ event_id: eventId, result: chainData });
-  } catch (error) {
-    transactionCounter.inc({ operation: 'queryPartEvent', status: 'failure' });
-    errorCounter.inc({ operation: 'queryPartEvent', error_type: error.name });
-    endTimer({ operation: 'queryPartEvent' });
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * チェーン上のハッシュとオフチェーンDBのハッシュを比較・検証
- */
-app.get('/api/verify/:event_id', async (req, res) => {
-  const endTimer = transactionDuration.startTimer();
-  requestCounter.inc({ method: req.method, route: req.originalUrl });
-
-  const { event_id: eventId } = req.params;
-  try {
-    const fabricConnection = await getContract();
-    const onChainResult = await fabricConnection.contract.evaluateTransaction('queryPartEvent', eventId);
-    const onChainData = JSON.parse(onChainResult.toString());
-    await fabricConnection.gateway.disconnect();
-
-    const offChainData = getEventById(eventId);
-    if (!offChainData) {
-      errorCounter.inc({ operation: 'verifyPartEvent', error_type: 'event_not_found' });
-      return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
-    }
-
-    const isMatch = (
-      onChainData.part_hash === offChainData.part_hash &&
-      onChainData.supplier_hash === offChainData.supplier_hash &&
-      onChainData.operator_hash === offChainData.operator_hash
-    );
-
-    transactionCounter.inc({ operation: 'verifyPartEvent', status: 'success' });
-    endTimer({ operation: 'verifyPartEvent' });
-
-    console.log('アクション：ハッシュ比較');
-    res.json({
-      event_id: eventId,
-      isValid: isMatch,
-      onChainHash: {
-        part_hash: onChainData.part_hash,
-        supplier_hash: onChainData.supplier_hash,
-        operator_hash: onChainData.operator_hash
-      },
-      offChainHash: {
-        part_hash: offChainData.part_hash,
-        supplier_hash: offChainData.supplier_hash,
-        operator_hash: offChainData.operator_hash
+      if (!partData || !supplierData || !operatorData) {
+        METRICS.errorCounter.inc({ operation: 'recordPartEvent', error_type: 'missing_master_data' });
+        return res.status(400).json({ error: 'マスターデータが不足しています' });
       }
-    });
-  } catch (error) {
-    transactionCounter.inc({ operation: 'verifyPartEvent', status: 'failure' });
-    errorCounter.inc({ operation: 'verifyPartEvent', error_type: error.name });
-    endTimer({ operation: 'verifyPartEvent' });
-    console.error(error);
-    res.status(500).json({ error: error.message });
+
+      const partHash = createHashBySortedKeys(partData);
+      const supplierHash = createHashBySortedKeys(supplierData);
+      const operatorHash = createHashBySortedKeys(operatorData);
+
+      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
+      const txResult = await FABRIC_OPERATIONS.recordPartEvent(contract, [
+        eventId, partId, status, timestamp, location, operatorId,
+        partHash, supplierHash, operatorHash
+      ]);
+      await gateway.disconnect();
+
+      const newEventData = {
+        event_id: eventId,
+        part_id: partId,
+        status,
+        timestamp,
+        location,
+        operator_id: operatorId,
+        part_hash: partHash,
+        supplier_hash: supplierHash,
+        operator_hash: operatorHash
+      };
+      DB_OPERATIONS.saveEvent(newEventData);
+
+      METRICS.transactionCounter.inc({ operation: 'recordPartEvent', status: 'success' });
+      endTimer({ operation: 'recordPartEvent' });
+
+      console.log('アクション：イベント登録');
+      res.json({ success: true, txResult: txResult.toString() });
+    } catch (error) {
+      METRICS.transactionCounter.inc({ operation: 'recordPartEvent', status: 'failure' });
+      METRICS.errorCounter.inc({ operation: 'recordPartEvent', error_type: error.name });
+      endTimer({ operation: 'recordPartEvent' });
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Query event from chain
+  getQueryEvent: async (req, res) => {
+    const endTimer = METRICS.transactionDuration.startTimer();
+    METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
+
+    const { event_id: eventId } = req.params;
+    try {
+      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
+      const result = await FABRIC_OPERATIONS.queryPartEvent(contract, eventId);
+      await gateway.disconnect();
+
+      const chainData = JSON.parse(result.toString());
+      METRICS.transactionCounter.inc({ operation: 'queryPartEvent', status: 'success' });
+      endTimer({ operation: 'queryPartEvent' });
+
+      console.log('アクション：チェーン上データ取得');
+      res.json({ event_id: eventId, result: chainData });
+    } catch (error) {
+      METRICS.transactionCounter.inc({ operation: 'queryPartEvent', status: 'failure' });
+      METRICS.errorCounter.inc({ operation: 'queryPartEvent', error_type: error.name });
+      endTimer({ operation: 'queryPartEvent' });
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Verify event hashes
+  getVerifyEvent: async (req, res) => {
+    const endTimer = METRICS.transactionDuration.startTimer();
+    METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
+
+    const { event_id: eventId } = req.params;
+    try {
+      const { contract, gateway } = await FABRIC_OPERATIONS.getContract();
+      const onChainResult = await FABRIC_OPERATIONS.queryPartEvent(contract, eventId);
+      const onChainData = JSON.parse(onChainResult.toString());
+      await gateway.disconnect();
+
+      const offChainData = DB_OPERATIONS.getEventById(eventId);
+      if (!offChainData) {
+        METRICS.errorCounter.inc({ operation: 'verifyPartEvent', error_type: 'event_not_found' });
+        return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
+      }
+
+      const isMatch = (
+        onChainData.part_hash === offChainData.part_hash &&
+        onChainData.supplier_hash === offChainData.supplier_hash &&
+        onChainData.operator_hash === offChainData.operator_hash
+      );
+
+      METRICS.transactionCounter.inc({ operation: 'verifyPartEvent', status: 'success' });
+      endTimer({ operation: 'verifyPartEvent' });
+
+      console.log('アクション：ハッシュ比較');
+      res.json({
+        event_id: eventId,
+        isValid: isMatch,
+        onChainHash: {
+          part_hash: onChainData.part_hash,
+          supplier_hash: onChainData.supplier_hash,
+          operator_hash: onChainData.operator_hash
+        },
+        offChainHash: {
+          part_hash: offChainData.part_hash,
+          supplier_hash: offChainData.supplier_hash,
+          operator_hash: offChainData.operator_hash
+        }
+      });
+    } catch (error) {
+      METRICS.transactionCounter.inc({ operation: 'verifyPartEvent', status: 'failure' });
+      METRICS.errorCounter.inc({ operation: 'verifyPartEvent', error_type: error.name });
+      endTimer({ operation: 'verifyPartEvent' });
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Get all events
+  getAllEvents: (req, res) => {
+    const endTimer = METRICS.transactionDuration.startTimer();
+    METRICS.requestCounter.inc({ method: req.method, route: req.originalUrl });
+
+    try {
+      const events = DB_OPERATIONS.getAllEvents();
+      METRICS.transactionCounter.inc({ operation: 'getAllEvents', status: 'success' });
+      endTimer({ operation: 'getAllEvents' });
+
+      console.log('アクション：イベント一覧取得');
+      res.json(events);
+    } catch (error) {
+      METRICS.transactionCounter.inc({ operation: 'getAllEvents', status: 'failure' });
+      METRICS.errorCounter.inc({ operation: 'getAllEvents', error_type: error.name });
+      endTimer({ operation: 'getAllEvents' });
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
   }
-});
+};
 
-/**
- * すべてのイベントを取得
- */
-app.get('/api/events', (req, res) => {
-  const endTimer = transactionDuration.startTimer();
-  requestCounter.inc({ method: req.method, route: req.originalUrl });
+// =======================
+//  Route Definitions
+// =======================
 
-  try {
-    const events = getAllEvents();
-    transactionCounter.inc({ operation: 'getAllEvents', status: 'success' });
-    endTimer({ operation: 'getAllEvents' });
+app.get('/metrics', ROUTE_HANDLERS.getMetrics);
+app.post('/api/part-event', ROUTE_HANDLERS.postPartEvent);
+app.get('/api/query/:event_id', ROUTE_HANDLERS.getQueryEvent);
+app.get('/api/verify/:event_id', ROUTE_HANDLERS.getVerifyEvent);
+app.get('/api/events', ROUTE_HANDLERS.getAllEvents);
 
-    console.log('アクション：イベント一覧取得');
-    res.json(events);
-  } catch (error) {
-    transactionCounter.inc({ operation: 'getAllEvents', status: 'failure' });
-    errorCounter.inc({ operation: 'getAllEvents', error_type: error.name });
-    endTimer({ operation: 'getAllEvents' });
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// アプリケーションをエクスポート
+// Export application
 module.exports = { app };
