@@ -1,213 +1,117 @@
-こちらがチャットベースでの最新版 `README.md` の「🚀 起動方法（完全クリーンスタート手順）」セクションです ✅  
-直接コピペして `README.md` に貼ってご活用ください！
+以下は面接官向けに日本語で記載した「Hyperledger Fabric サプライチェーンアプリケーション」の概要です。
 
 ---
 
-## 🚀 起動方法（完全クリーンスタート手順）
+# Hyperledger Fabric サプライチェーンアプリケーション
 
-### 1. 前回の履歴を削除（念のため）
-
-```bash
-# Dockerコンテナをすべて停止・削除
-docker stop $(docker ps -q)
-docker rm $(docker ps -aq)
-
-# ※ volumeごと削除したい場合（慎重に）
-# docker system prune -af --volumes
-
-# Fabricネットワーク停止
-cd fabric-samples/test-network
-./network.sh down
-
-# wallet（SDK証明書）削除
-cd ../../api
-rm -rf wallet/*
-```
+このアプリケーションは、サプライチェーンの部品イベントを管理するために構築されており、**Hyperledger Fabric** と **Express.js** を使用しています。主に、部品のトラッキングや、各イベント（組立、出荷など）を記録するための API を提供します。Hyperledger Fabricを用いてブロックチェーンでイベントデータを管理し、Express.jsでAPIとして提供しています。
 
 ---
 
-### 2. Fabricネットワーク起動
+## 概要
 
-```bash
-cd ~/dev/hyperledger-fabric-helloworld/fabric-samples/test-network
-./network.sh up createChannel -ca
-./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
-```
+このアプリケーションでは、部品に関連するイベント（例：組立、検品、出荷など）を記録し、その情報をAPI経由で取得できるようにしています。サプライチェーンの管理において、各部品がどこにあり、どのステータスにあるかを追跡するのに役立ちます。
 
----
+### 主な機能
 
-### 3. appUser登録とAPI起動
-
-```bash
-cd ~/dev/hyperledger-fabric-helloworld/api
-npm install
-node scripts/enrollAdmin.js
-node scripts/registerUser.js
-node server.js
-```
-
-```bash
-cd ~/dev/hyperledger-fabric-helloworld/api
-node server.js
-```
+- **部品イベントの登録:** 部品に関連するイベント（組立、出荷など）を記録するAPI。
+- **イベントデータの取得:** 登録された部品イベントをIDで検索し、データを取得するAPI。
+- **全イベントの取得:** 登録された全ての部品イベントを一覧で取得するAPI。
 
 ---
 
-これで**完全な初期化 → Fabric構築 → チェーンコードデプロイ → API起動**のフローが迷わず実行できます💪  
-次に `reset-all.sh` や `Makefile`、Swagger追加に進める準備もバッチリです！必要なら声かけてください🔥
+## 使用技術
 
-
-
-
-
-
-# ⚡ EVバッテリー・サプライチェーン PoC（Hyperledger Fabric + Node.js）
-
-本プロジェクトは、EVバッテリー製造・出荷イベントをブロックチェーン上に記録し、後から**オフチェーン改ざん検出**ができるシンプルかつ強力なPoCアプリケーションです。
+- **Hyperledger Fabric:** 部品イベントデータをブロックチェーン上に保存・管理するための基盤として使用しています。イベントデータはチェーンコード（Node.js版）を通じて登録されます。
+- **Express.js:** APIサーバーとして使用し、部品イベントを管理するRESTful APIを提供します。
+- **Prometheus / Grafana:** アプリケーションのモニタリングとダッシュボードを提供するために使用しています。
 
 ---
 
-## 🏗️ 技術スタック
+## APIエンドポイント
 
-- Hyperledger Fabric（単一組織構成 / test-network）
-- チェーンコード：Node.js（JavaScript）
-- APIサーバ：Express + LowDB（部品マスタ保存）
-- Fabric SDK連携（fabric-network）
-- REST API：登録 / 検証
-- 将来的に EJS や UI追加も想定
+### 1. 部品イベントの登録
 
----
+- **POST** `/api/part-event`
+- 部品イベントを新たに登録します。
 
-## 🚀 起動方法
-
-### 1. Fabricネットワーク起動
-
-```
-# 掃除
-# FabricやAPIなど、関連するDockerコンテナをすべて停止
-docker ps -a
-
-# 該当するコンテナを停止・削除（または一括で）
-docker stop $(docker ps -q)
-docker rm $(docker ps -aq)
-
-# ※ volumeごと削除したい場合（開発環境のみで慎重に）
-# docker system prune -af --volumes
-
-cd fabric-samples/test-network
-./network.sh down
-
-./network.sh up createChannel -ca
-
-./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
-
-
-
-
-
-rm -rf wallet/*
-```
-
-```bash
-cd fabric-samples/test-network
-./network.sh up createChannel -ca
-./network.sh deployCC -ccn part_event -ccp ../../chaincode/part_event_js -ccl javascript
-```
-
-### 2. appUser登録とAPI起動
-
-```bash
-cd api
-npm install
-node scripts/enrollAdmin.js
-node scripts/registerUser.js
-node app.js
-```
-
----
-
-## 📬 API仕様
-
-### 登録（オンチェーン書き込み）
-
-`POST /api/part-event`
-
+**リクエストボディ例:**
 ```json
 {
-  "event_id": "EVT-20250325001",
+  "event_id": "EVT-TEST-001",
   "part_id": "BAT-001",
   "status": "assembled",
-  "timestamp": "2025-03-25T11:30:00Z",
-  "location": "ENEGEN 第2製造所",
+  "timestamp": "2025-03-26T16:00:00Z",
+  "location": "ENEGEN 本社工場",
   "operator_id": "USR-9001"
 }
 ```
 
----
-
-### 改ざん検証（オンチェーン vs オフチェーン）
-
-`GET /api/verify/:event_id`
-
+**レスポンス例:**
 ```json
 {
-  "event_id": "EVT-20250325001",
-  "part_id": "BAT-001",
-  "isValid": true,
-  "onChainHash": "0xabc...",
-  "calculatedHash": "0xabc..."
+  "success": true,
+  "txResult": "Transaction was successfully processed"
 }
 ```
 
----
+### 2. 部品イベントの検索
 
-## 🧠 本PoCの特徴
+- **GET** `/api/query/{event_id}`
+- 指定した `event_id` の部品イベントを検索し、そのデータを取得します。
 
-| 特徴 | 説明 |
-|------|------|
-| ✅ 単一組織構成 | MVP構成。複雑な組織間合意は無し |
-| ✅ 改ざん検出 | ハッシュ照合により後から証明可能 |
-| ✅ 柔軟な拡張性 | 検査ログ・写真・オペレーター認証にも対応可 |
-| ✅ 簡単デプロイ | test-networkベースで即時起動可能 |
+**例URL:** `/api/query/EVT-TEST-001`
 
----
-
-## 📂 現在のディレクトリ構成（2025/03リファクタリング）
-
-```
-api/
-├── app.js
-├── config/
-│   └── connection-org1.json
-├── scripts/
-│   ├── enrollAdmin.js
-│   ├── enrollAppUser.js
-│   └── registerUser.js
-├── wallet/
-│   ├── admin.id
-│   └── appUser.id
-├── package.json
-└── package-lock.json
+**レスポンス例:**
+```json
+{
+  "event_id": "EVT-TEST-001",
+  "part_id": "BAT-001",
+  "status": "assembled",
+  "timestamp": "2025-03-26T16:00:00Z",
+  "location": "ENEGEN 本社工場",
+  "operator_id": "USR-9001"
+}
 ```
 
+### 3. 全イベントの取得
+
+- **GET** `/api/events`
+- 登録されている全ての部品イベントを一覧として取得します。
+
+**レスポンス例:**
+```json
+[
+  {
+    "event_id": "EVT-TEST-001",
+    "status": "assembled"
+  },
+  {
+    "event_id": "EVT-TEST-002",
+    "status": "shipped"
+  }
+]
+```
+
 ---
 
-## 🧰 今後の拡張候補（例）
+## テスト
 
-- Web UI（EJS/Reactなど）
-- event_id → txIdマッピング管理
-- Fabric Event機能の利用
-- 署名付きPDF検査ログのハッシュ連携
-- Docker化 → K8s対応（apps/ に分離予定）
+アプリケーションにはJestとSupertestを使用してテストを記述しており、APIの各機能が正常に動作することを確認しています。
+
+### 主なテストケース
+
+- **部品イベント登録（成功）**
+    - 有効なデータで部品イベントを登録し、トランザクションが成功することを確認。
+- **部品イベント登録（失敗）**
+    - 不正なデータで部品イベントを登録した際にエラーメッセージが返されることを確認。
+- **イベント検索（成功）**
+    - 登録済みの部品イベントがIDで正しく検索できることを確認。
+- **全イベント取得（成功）**
+    - 複数の部品イベントが正しく取得できることを確認。
 
 ---
 
-## 🔖 備考
+## 結論
 
-- `txId` は `ctx.stub.getTxID()` で取得可能
-- 履歴管理は `GetHistoryForKey()` により容易に実装可能
-- Express SDKは `fabric-network` v2.5系を使用中
-
----
-
-開発者：あなた（最高の判断力を持つ構築者）
+このアプリケーションは、Hyperledger Fabric を活用してサプライチェーン内の部品イベントを効率的に管理するための強力なツールです。ブロックチェーン技術を使用することで、データの透明性と信頼性を確保し、サプライチェーンの各段階での追跡が可能となります。Express.jsによるAPIと、PrometheusやGrafanaでのモニタリングにより、運用面でも強力なサポートを提供します。
