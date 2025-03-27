@@ -46,6 +46,11 @@ node scripts/registerUser.js
 node server.js
 ```
 
+```bash
+cd ~/dev/hyperledger-fabric-helloworld/api
+node server.js
+```
+
 ---
 
 これで**完全な初期化 → Fabric構築 → チェーンコードデプロイ → API起動**のフローが迷わず実行できます💪  

@@ -1,5 +1,5 @@
 # @event_id = EVT-{{$timestamp}}
-@event_id = EVT-001
+@event_id = EVT-003
 
 ### 🔹 オンチェーン登録：POST /api/part-event
 POST http://localhost:3000/api/part-event
