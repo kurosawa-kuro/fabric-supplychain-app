@@ -2,7 +2,7 @@
 @event_id = EVT-003
 
 ### 🔹 オンチェーン登録：POST /api/part-event
-POST http://localhost:3000/api/part-event
+POST http://localhost:8080/api/part-event
 Content-Type: application/json
 
 {
@@ -17,15 +17,18 @@ Content-Type: application/json
 ###
 
 ### 🔍 オンチェーン取得：GET /api/query/:event_id
-GET http://localhost:3000/api/query/{{event_id}}
+GET http://localhost:8080/api/query/{{event_id}}
 
 ###
 
 ### 🔐 改ざん検証：GET /api/verify/:event_id
-GET http://localhost:3000/api/verify/{{event_id}}
+GET http://localhost:8080/api/verify/{{event_id}}
 
 ###
 
 ### 📦 イベント一覧取得：GET /api/events
-GET http://localhost:3000/api/events
+GET http://localhost:8080/api/events
 
+
+### 📦 metrics：GET /api/metrics
+GET http://localhost:8080/metrics

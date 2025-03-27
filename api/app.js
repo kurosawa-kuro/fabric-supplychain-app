@@ -6,6 +6,43 @@ const fs = require('fs');
 const { Gateway, Wallets } = require('fabric-network');
 const { db, initializeMasterData } = require('./database/initializeMasterData');
 const { createHashBySortedKeys } = require('./util');
+const client = require('prom-client');  // Prometheusライブラリのインポート
+
+// =======================
+//  Prometheusメトリクス設定
+// =======================
+
+const collectDefaultMetrics = client.collectDefaultMetrics;
+collectDefaultMetrics();  // デフォルトメトリクスの収集
+
+// リクエストカウンター
+const requestCounter = new client.Counter({
+  name: 'express_app_requests_total',
+  help: 'Total number of requests received by the Express app',
+  labelNames: ['method', 'route'],
+});
+
+// トランザクション実行時間
+const transactionDuration = new client.Histogram({
+  name: 'fabric_transaction_duration_seconds',
+  help: 'Duration of Fabric transactions',
+  labelNames: ['operation'],
+  buckets: [0.1, 0.5, 1, 2, 5],
+});
+
+// トランザクション成功/失敗カウンター
+const transactionCounter = new client.Counter({
+  name: 'fabric_transactions_total',
+  help: 'Total number of Fabric transactions',
+  labelNames: ['operation', 'status'],
+});
+
+// エラーカウンター
+const errorCounter = new client.Counter({
+  name: 'fabric_errors_total',
+  help: 'Total number of Fabric-related errors',
+  labelNames: ['operation', 'error_type'],
+});
 
 // =======================
 //  DBサービス関連
@@ -93,22 +130,27 @@ async function getContract() {
 }
 
 // =======================
-//  ハッシュ作成関連
-// =======================
-
-
-
-// =======================
 //  Expressアプリ／ルーティング
 // =======================
 
 const app = express();
 app.use(express.json());
 
+// メトリクスエンドポイント
+app.get('/metrics', async (req, res) => {
+  // メトリクスを収集
+  requestCounter.inc({ method: req.method, route: req.originalUrl });  // リクエストのカウントをインクリメント
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());  // メトリクスをPrometheusに返す
+});
+
 /**
  * パーツイベントを登録する
  */
 app.post('/api/part-event', async (req, res) => {
+  const endTimer = transactionDuration.startTimer();
+  requestCounter.inc({ method: req.method, route: req.originalUrl });
+
   const {
     event_id: eventId,
     part_id: partId,
@@ -124,17 +166,15 @@ app.post('/api/part-event', async (req, res) => {
     const supplierData = partData ? getSupplierById(partData.supplier_id) : null;
     const operatorData = getOperatorById(operatorId);
 
-    // マスターデータが足りない場合はエラー
     if (!partData || !supplierData || !operatorData) {
+      errorCounter.inc({ operation: 'recordPartEvent', error_type: 'missing_master_data' });
       return res.status(400).json({ error: 'マスターデータが不足しています' });
     }
 
-    // ハッシュ作成
     const partHash = createHashBySortedKeys(partData);
     const supplierHash = createHashBySortedKeys(supplierData);
     const operatorHash = createHashBySortedKeys(operatorData);
 
-    // Fabricにイベント登録
     const { contract, gateway } = await getContract();
     const txResult = await contract.submitTransaction(
       'recordPartEvent',
@@ -150,7 +190,6 @@ app.post('/api/part-event', async (req, res) => {
     );
     await gateway.disconnect();
 
-    // ローカルDBにもイベント保存（同じevent_idがあれば削除→追加）
     const newEventData = {
       event_id: eventId,
       part_id: partId,
@@ -164,8 +203,15 @@ app.post('/api/part-event', async (req, res) => {
     };
     saveEvent(newEventData);
 
+    transactionCounter.inc({ operation: 'recordPartEvent', status: 'success' });
+    endTimer({ operation: 'recordPartEvent' });
+
+    console.log('アクション：イベント登録');
     res.json({ success: true, txResult: txResult.toString() });
   } catch (error) {
+    transactionCounter.inc({ operation: 'recordPartEvent', status: 'failure' });
+    errorCounter.inc({ operation: 'recordPartEvent', error_type: error.name });
+    endTimer({ operation: 'recordPartEvent' });
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -175,6 +221,9 @@ app.post('/api/part-event', async (req, res) => {
  * イベントをチェーン上から取得
  */
 app.get('/api/query/:event_id', async (req, res) => {
+  const endTimer = transactionDuration.startTimer();
+  requestCounter.inc({ method: req.method, route: req.originalUrl });
+
   const { event_id: eventId } = req.params;
   try {
     const { contract, gateway } = await getContract();
@@ -182,8 +231,15 @@ app.get('/api/query/:event_id', async (req, res) => {
     await gateway.disconnect();
 
     const chainData = JSON.parse(result.toString());
+    transactionCounter.inc({ operation: 'queryPartEvent', status: 'success' });
+    endTimer({ operation: 'queryPartEvent' });
+
+    console.log('アクション：チェーン上データ取得');
     res.json({ event_id: eventId, result: chainData });
   } catch (error) {
+    transactionCounter.inc({ operation: 'queryPartEvent', status: 'failure' });
+    errorCounter.inc({ operation: 'queryPartEvent', error_type: error.name });
+    endTimer({ operation: 'queryPartEvent' });
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -193,27 +249,32 @@ app.get('/api/query/:event_id', async (req, res) => {
  * チェーン上のハッシュとオフチェーンDBのハッシュを比較・検証
  */
 app.get('/api/verify/:event_id', async (req, res) => {
+  const endTimer = transactionDuration.startTimer();
+  requestCounter.inc({ method: req.method, route: req.originalUrl });
+
   const { event_id: eventId } = req.params;
   try {
-    // チェーン上データを取得
     const fabricConnection = await getContract();
     const onChainResult = await fabricConnection.contract.evaluateTransaction('queryPartEvent', eventId);
     const onChainData = JSON.parse(onChainResult.toString());
     await fabricConnection.gateway.disconnect();
 
-    // オフチェーンDBのイベントを取得
     const offChainData = getEventById(eventId);
     if (!offChainData) {
+      errorCounter.inc({ operation: 'verifyPartEvent', error_type: 'event_not_found' });
       return res.status(404).json({ error: 'オフチェーンイベントが見つかりません' });
     }
 
-    // ハッシュ比較
     const isMatch = (
       onChainData.part_hash === offChainData.part_hash &&
       onChainData.supplier_hash === offChainData.supplier_hash &&
       onChainData.operator_hash === offChainData.operator_hash
     );
 
+    transactionCounter.inc({ operation: 'verifyPartEvent', status: 'success' });
+    endTimer({ operation: 'verifyPartEvent' });
+
+    console.log('アクション：ハッシュ比較');
     res.json({
       event_id: eventId,
       isValid: isMatch,
@@ -229,6 +290,9 @@ app.get('/api/verify/:event_id', async (req, res) => {
       }
     });
   } catch (error) {
+    transactionCounter.inc({ operation: 'verifyPartEvent', status: 'failure' });
+    errorCounter.inc({ operation: 'verifyPartEvent', error_type: error.name });
+    endTimer({ operation: 'verifyPartEvent' });
     console.error(error);
     res.status(500).json({ error: error.message });
   }
@@ -238,10 +302,20 @@ app.get('/api/verify/:event_id', async (req, res) => {
  * すべてのイベントを取得
  */
 app.get('/api/events', (req, res) => {
+  const endTimer = transactionDuration.startTimer();
+  requestCounter.inc({ method: req.method, route: req.originalUrl });
+
   try {
     const events = getAllEvents();
+    transactionCounter.inc({ operation: 'getAllEvents', status: 'success' });
+    endTimer({ operation: 'getAllEvents' });
+
+    console.log('アクション：イベント一覧取得');
     res.json(events);
   } catch (error) {
+    transactionCounter.inc({ operation: 'getAllEvents', status: 'failure' });
+    errorCounter.inc({ operation: 'getAllEvents', error_type: error.name });
+    endTimer({ operation: 'getAllEvents' });
     console.error(error);
     res.status(500).json({ error: error.message });
   }

@@ -1,4 +1,4 @@
-// file: server.js
+// dev/hyperledger-fabric-helloworld/api/server.js
 
 'use strict';
 
@@ -24,7 +24,7 @@ async function startServer() {
       process.exit(1);
     }
 
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 8080;
     server = app.listen(port, () => {
       console.log(`🚀 API server with Fabric SDK listening on port ${port}`);
     });
