@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const path = require('path');
 const { createHashBySortedKeys } = require('./util');
 const client = require('prom-client');
 const METRICS = require('./metrics');
