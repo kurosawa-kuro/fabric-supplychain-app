@@ -1,5 +1,5 @@
-Swagger
-http://43.207.190.23:8080/api-docs/
+- [デモ 動画](https://drive.google.com/file/d/104IpUk8AHCKFt1GwZMWUKFvyalwVQxfn/view?usp=sharing)
+- [デモ アプリ](http://43.207.190.23:8080/api-docs/)
 
 # Hyperledger Fabric サプライチェーンアプリケーション
 
