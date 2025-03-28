@@ -1,4 +1,5 @@
-
+Swagger
+http://43.207.190.23:8080/api-docs/
 
 # Hyperledger Fabric サプライチェーンアプリケーション
 
